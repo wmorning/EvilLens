@@ -1,0 +1,28 @@
+\begin{document}
+In order to properly produce a lensed image (given a source image, and a 
+lensing mass distribution), one needs to trace the light rays backwards 
+from the observed image to the source.  When a light ray is deflected by an 
+object, the change in angle by which it is deflected \alpha can be inferred
+using a projection of the lensing mass density onto a 2-dimensional plane.
+Mathematically, this is: 
+
+\begin{equation} \alpha = \int\int \kappa(x,y) \frac{}{}
+\end{equation}
+Where \alpha is the deflection angle, and \kappa(x,y) is the dimensionless
+surface density
+
+\begin{equation} \kappa(x,y) = \frac{\Sigma(x,y)}{\Sigma_{c}}
+
+\end{equation}
+
+Here, $\Sigma_{c}$ is the critical surface density, which is dependent on the
+lens geometry.
+
+\begin{equation} \Sigma_{c} = \frac{c^2}{4\pi G}\frac{D_{s}}{D_{d}D_{ds}}
+\end{equation}
+
+Given a specific lensing geometry, and a specific mass profile, a map of 
+\kappa can be produced over the lensing plane, and integrating over that map
+produces a map of the observing pixels in the source frame.
+
+\end{document}
