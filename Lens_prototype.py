@@ -9,6 +9,7 @@ Created on Mon Sep 29 22:53:20 2014
 from astropy import units, constants
 from math import pi
 from astropy.cosmology import angular_diameter_distance
+from astropy.modeling import models
 
 
 
@@ -18,7 +19,13 @@ class GravitationalLens:
         
         self.Zd = Zd
         self.Zs = Zs
+        self.Dd = None
+        self.Ds = None
+        self.Dds = None
+        self.SigmaCrit = None
+        
         self.compute_distances()
+        
         
     def compute_distances(self):
         
@@ -30,4 +37,8 @@ class GravitationalLens:
         self.Dd = Dd
         self.Ds = Ds
         self.Dds = Dds
-        self.SigmaCrit = SigmaCrit
+        self.SigmaCrit = units.Quantity.decompose(SigmaCrit)
+        
+    #def build_from( x_length , y_length , N_Sidepoints , function):
+        
+        
