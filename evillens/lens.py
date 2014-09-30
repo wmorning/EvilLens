@@ -43,9 +43,9 @@ class GravitationalLens(object):
         # PJM: See docs at http://docs.astropy.org/en/latest/api/astropy.cosmology.FLRW.html#astropy.cosmology.FLRW.angular_diameter_distance_z1z2
         SigmaCrit = constants.c**2 /(4*pi*constants.G) * Ds/(Dd*Dds)
         
-        self.Dd = Dd * units.Mpc
-        self.Ds = Ds * units.Mpc
-        self.Dds = Dds * units.Mpc
+        self.Dd = Dd
+        self.Ds = Ds 
+        self.Dds = Dds 
         self.SigmaCrit = units.Quantity.to(SigmaCrit,units.solMass/units.Mpc**2)
         
         return
