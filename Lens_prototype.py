@@ -37,8 +37,8 @@ class GravitationalLens:
         self.Dd = Dd
         self.Ds = Ds
         self.Dds = Dds
-        self.SigmaCrit = units.Quantity.decompose(SigmaCrit)
+        self.SigmaCrit = units.Quantity.to(SigmaCrit, units.solMass/units.Mpc**2)
         
-    #def build_from( x_length , y_length , N_Sidepoints , function):
+
         
         
