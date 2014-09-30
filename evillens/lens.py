@@ -42,30 +42,16 @@ class GravitationalLens(object):
         Dds = self.cosmological.angular_diameter_distance_z1z2(self.Zd,self.Zs)
         # PJM: See docs at http://docs.astropy.org/en/latest/api/astropy.cosmology.FLRW.html#astropy.cosmology.FLRW.angular_diameter_distance_z1z2
         SigmaCrit = constants.c**2 /(4*pi*constants.G) * Ds/(Dd*Dds)
-<<<<<<< HEAD
         
-        self.Dd = Dd
-        self.Ds = Ds
-        self.Dds = Dds
-        self.SigmaCrit = units.Quantity.to(SigmaCrit, units.solMass/units.Mpc**2)
-        
-
-=======
-
         self.Dd = Dd * units.Mpc
         self.Ds = Ds * units.Mpc
         self.Dds = Dds * units.Mpc
-        self.SigmaCrit = units.Quantity.decompose(SigmaCrit)
+        self.SigmaCrit = units.Quantity.to(SigmaCrit,units.solMass/units.Mpc**2)
         
         return
         
 # ----------------------------------------------------------------------
 
-#    def build_from( x_length , y_length , N_Sidepoints , function):
-#        return
->>>>>>> 3824161062d8c9a5f7b353b31f7f0a9038b10c07
-        
-# ======================================================================
 
 if __name__ == '__main__':
 
