@@ -1,1 +1,2 @@
-from lens import *
+from gravitationalLens import *
+from analyticSIELens import *

@@ -58,3 +58,6 @@ target/
 *.dvi
 *.aux
 *.blg
+
+# ipython stuff
+*ipynb_checkpoints*
