@@ -3,6 +3,10 @@ EvilLens
 
 Simulating images and visibilities of gravitationally lensed galaxies, behind Yashar Hezaveh's back.
 
+## Tests, demos etc
+
+* [Deflection angle testing](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/add_analytic_SIE/DeflectionTest.ipynb)
+
 ## Authors
 
 * Warren Morningstar (KIPAC)
