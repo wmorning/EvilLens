@@ -6,7 +6,7 @@ Simulating images and visibilities of gravitationally lensed galaxies, behind Ya
 ## Tests, demos etc
 
 * [Deflection angle testing](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/add_analytic_SIE/DeflectionTest.ipynb)
-* * [Plot testing](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/plotting/PlottingTest.ipynb)
+* [Plot testing](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/plotting/PlottingTest.ipynb)
 
 ## Authors
 
