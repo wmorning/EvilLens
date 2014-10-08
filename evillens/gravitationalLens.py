@@ -9,9 +9,8 @@ Created on Mon Sep 29 22:53:20 2014
 from astropy import units, constants
 from math import pi
 from astropy.cosmology import FlatLambdaCDM
-from numpy import linspace, meshgrid, arctan2, sin, cos, sqrt, arctanh, arctan
-# import numpy as np
-# from astropy.modeling import models
+from astropy.table import Table
+import numpy as np
 
 # ======================================================================
 
@@ -60,8 +59,9 @@ class GravitationalLens(object):
         
 # ----------------------------------------------------------------------
        
-    def read_kappa_from(fitsfile):
-        raise Exception("Can't read in kappa maps yet.\n")
+    def read_kappa_from(self,fitsfile):
+        raise Exception("Can't read in kappa maps yet.\n") 
+        #self.kappa = Table.read(fitsfile)
         return
         
 # ----------------------------------------------------------------------
@@ -76,6 +76,13 @@ class GravitationalLens(object):
         raise Exception("Can't plot anything yet.\n")  
         return
 
+# ----------------------------------------------------------------------
+
+    def write_kappa_to_fits(self,fitsfile):
+        raise Exception("Can't write kappa map to fits yet.\n")
+        #self.kappa.write( fitsfile )         
+        return
+        
 # ----------------------------------------------------------------------
 
     def raytrace(source_image):
