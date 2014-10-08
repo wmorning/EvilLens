@@ -28,23 +28,32 @@ class AnalyticSIELens(evil.GravitationalLens):
  
     def build_kappa_map(self):
          
-         x = np.sin(np.linspace(-self.xLength/2,self.xLength/2,self.Npixels)) * self.Dd
-         y = np.sin(np.linspace(-self.yLength/2,self.yLength/2,self.Npixels)) *self.Dd
-         self.image_x, self.image_y = np.meshgrid(x,y)
+         # PJM: Grid now set up in base class, in arcsec...
+         # x = np.sin(np.linspace(-self.xLength/2,self.xLength/2,self.Npixels)) * self.Dd
+         # y = np.sin(np.linspace(-self.yLength/2,self.yLength/2,self.Npixels)) * self.Dd
+         # self.image_x, self.image_y = np.meshgrid(x,y)
          
-         Sigma_ellipsoid = self.sigma**2/(2*constants.G *np.sqrt(self.q*self.image_x**2+self.image_y**2))
-         self.kappa = units.Quantity.to(Sigma_ellipsoid,units.solMass/units.Mpc**2) / self.SigmaCrit
+         # First compute Einstein radius, in arcsec:
+         Sigma_ellipsoid = self.sigma**2/(2.0*constants.G) # Missing some things here... 
+         thetaE = units.Quantity.to(Sigma_ellipsoid,units.solMass/units.Mpc**2) / self.SigmaCrit
          
+         print thetaE
+         
+         # Now compute kappa = thetaE/(2*theta) where theta = elliptical radial position
+         self.kappa = thetaE/(2.0*np.sqrt(self.q*self.x**2+self.y**2))
+
          return
          
 # ----------------------------------------------------------------------
         
     def deflect(self):
         
-        x = np.sin(np.linspace(-self.xLength/2,self.xLength/2,self.Npixels)) * self.Dd /(1*units.Mpc)   
-        y = np.sin(np.linspace(-self.yLength/2,self.yLength/2,self.Npixels)) * self.Dd /(1*units.Mpc) 
-        image_x, image_y = np.meshgrid(x,y)              
-        image_theta = np.arctan2(image_y,image_x)      
+        # PJM: Grid now set up in base class, in arcsec...
+        # x = np.sin(np.linspace(-self.xLength/2,self.xLength/2,self.Npixels)) * self.Dd /(1*units.Mpc)   
+        # y = np.sin(np.linspace(-self.yLength/2,self.yLength/2,self.Npixels)) * self.Dd /(1*units.Mpc) 
+        # image_x, image_y = np.meshgrid(x,y)              
+        
+        image_theta = np.arctan2(self.y,self.x) # check...
 
         self.alpha_x = (self.q/np.sqrt(1-self.q**2))*np.arctan(np.sqrt((1-self.q**2)/(self.q**2*np.cos(image_theta)**2+np.sin(image_theta)**2))*np.cos(image_theta))
         self.alpha_y = (self.q/np.sqrt(1-self.q**2))*np.arctanh(np.sqrt((1-self.q**2)/(self.q**2*np.cos(image_theta)**2+np.sin(image_theta)**2))*np.sin(image_theta))
