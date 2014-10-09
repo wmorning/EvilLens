@@ -130,8 +130,21 @@ class GravitationalLens(object):
         if self.kappa is None:
             self.alpha_x = None
             self.alpha_y = None  
+        elif len(self.kappa.shape) == 2:
+            
+            #create empty arrays to be filled with x,y components of alpha
+            alpha_x = np.empty([self.NX,self.NY], float)
+            alpha_y = np.empty([self.NX,self.NY], float)
+            
+            #double for loop to get each point in array
+            for i in range(len(alpha_x[:,0])):
+                for j in range(len(alpha_x[0,:])):
+                    alpha_x[i,j] =1/np.pi * np.nansum(self.kappa * (self.x[i,j]-self.x)/((self.x[i,j]-self.x)**2+(self.y[i,j]-self.y)**2)*self.pixscale**2)
+                    alpha_y[i,j] =1/ np.pi * np.nansum(self.kappa * (self.y[i,j]-self.y)/((self.x[i,j]-self.x)**2+(self.y[i,j]-self.y)**2)*self.pixscale**2)
+            self.alpha_x = alpha_x
+            self.alpha_y = alpha_y
         else:
-            raise Exception("Can't do integral yet.\n")  
+            raise Exception("Can't do integral.  your kappa map must be 2-D .\n")  
         
         return
     
@@ -149,7 +162,22 @@ class GravitationalLens(object):
             options = dict(interpolation='nearest',\
                            origin='lower',\
                            vmin=-0.2, \
-                           vmax=1.5)        
+                           vmax=1.5)       
+                           
+        elif mapname == "alpha_x":
+            img = self.alpha_x
+            levels = np.arange(-0.5,0.5,0.1)
+            options = dict(interpolation='nearest',\
+                           origin='lower',\
+                           vmin=-0.5, \
+                           vmax=0.5)
+        elif mapname == "alpha_y":
+            img = self.alpha_y
+            levels = np.arange(-0.5,0.5,0.1)
+            options = dict(interpolation='nearest',\
+                           origin='lower',\
+                           vmin=-0.5, \
+                           vmax=0.5)
         else:
              raise ValueError("unrecognized map name %s" % mapname)
         
@@ -199,9 +227,15 @@ class GravitationalLens(object):
 
 # ----------------------------------------------------------------------
 
-    def write_kappa_to_fits(self,fitsfile):
+    def write_kappa_to( self, fitsfile="kappa_map.fits"):
         raise Exception("Can't write kappa map to fits yet.\n")
-        #self.kappa.write( fitsfile )         
+        
+        #hdu = fits.primary(self.kappa)
+        #if fitsfile = "*.fits":
+            #hdu.writeto(fitsfile)
+        #else:
+            #raise Exception("you must give a file name with a fits extension")
+       
         return
         
 # ----------------------------------------------------------------------

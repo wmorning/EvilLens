@@ -20,7 +20,7 @@ class AnalyticSIELens(evil.GravitationalLens):
     '''
     def __init__(self, *args, **kwargs):
         super(AnalyticSIELens, self).__init__(*args, **kwargs)
-        self.sigma = 200.0 * units.km/units.s
+        self.sigma = 70000.0 * units.km/units.s
         self.q = 0.75
         return    
         
@@ -34,13 +34,14 @@ class AnalyticSIELens(evil.GravitationalLens):
          # self.image_x, self.image_y = np.meshgrid(x,y)
          
          # First compute Einstein radius, in arcsec:
-         Sigma_ellipsoid = self.sigma**2/(2.0*constants.G) # Missing some things here... 
-         thetaE = units.Quantity.to(Sigma_ellipsoid,units.solMass/units.Mpc**2) / self.SigmaCrit
+         Sigma_ellipsoid = self.sigma**2/(2.0*constants.G*self.Dd)  # Missing some things here... 
+         print(Sigma_ellipsoid)         
+         thetaE = units.Quantity.to(Sigma_ellipsoid,units.solMass/units.Mpc**2) / self.SigmaCrit 
          
          print thetaE
          
          # Now compute kappa = thetaE/(2*theta) where theta = elliptical radial position
-         self.kappa = thetaE/(2.0*np.sqrt(self.q*self.x**2+self.y**2))
+         self.kappa = thetaE/(2.0*np.sqrt(self.q*(self.x)**2+(self.y)**2))
 
          return
          
@@ -78,5 +79,6 @@ if __name__ == '__main__':
     print SIElens.alpha_x
     
     SIElens.build_kappa_map()
+    
         
 # ======================================================================
