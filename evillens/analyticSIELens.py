@@ -34,14 +34,12 @@ class AnalyticSIELens(evil.GravitationalLens):
          # self.image_x, self.image_y = np.meshgrid(x,y)
          
          # First compute Einstein radius, in arcsec:
-         Sigma_ellipsoid = self.sigma**2/(2.0*constants.G*self.Dd)  # Missing some things here... 
-         print(Sigma_ellipsoid)         
+         Sigma_ellipsoid = self.sigma**2/(2.0*constants.G*self.Dd)  # Missing some things here...        
          thetaE = units.Quantity.to(Sigma_ellipsoid,units.solMass/units.Mpc**2) / self.SigmaCrit 
          
-         print thetaE
          
          # Now compute kappa = thetaE/(2*theta) where theta = elliptical radial position
-         self.kappa = thetaE/(2.0*np.sqrt(self.q*(self.x)**2+(self.y)**2))
+         self.kappa = thetaE.value/(2.0*np.sqrt(self.q*(self.x)**2+(self.y)**2))
 
          return
          
