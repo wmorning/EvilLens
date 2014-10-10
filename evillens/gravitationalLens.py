@@ -63,11 +63,15 @@ class GravitationalLens(object):
         if pixscale is not None: 
             self.pixscale = pixscale
             
-        self.n = n
-        self.pixel_offset = offset*self.pixscale/self.n
+
                
         xgrid = np.arange(-self.NX/2.0,self.NX/2.0,1.0)*self.pixscale
         ygrid = np.arange(-self.NY/2.0,self.NY/2.0,1.0)*self.pixscale
+        
+        #WRM:  here we build new grid for the image and source pixels,
+        #      purposefully misaligned with the kappa pixels, so no NaNs occur.        
+        self.n = n
+        self.pixel_offset = offset*self.pixscale/self.n
         image_xgrid = np.arange(-self.NX/2.0,self.NX/2.0,1.0/self.n)*self.pixscale-self.pixel_offset
         image_ygrid = np.arange(-self.NY/2.0,self.NY/2.0,1.0/self.n)*self.pixscale-self.pixel_offset
         
