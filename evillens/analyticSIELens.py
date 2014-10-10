@@ -22,6 +22,8 @@ class AnalyticSIELens(evil.GravitationalLens):
         super(AnalyticSIELens, self).__init__(*args, **kwargs)
         self.sigma = 70000.0 * units.km/units.s
         self.q = 0.75
+        self.centroid = [0.01,0.01]
+        
         return    
         
 # ----------------------------------------------------------------------
@@ -39,7 +41,7 @@ class AnalyticSIELens(evil.GravitationalLens):
          
          
          # Now compute kappa = thetaE/(2*theta) where theta = elliptical radial position
-         self.kappa = thetaE.value/(2.0*np.sqrt(self.q*(self.x)**2+(self.y)**2))
+         self.kappa = thetaE.value/(2.0*np.sqrt(self.q*(self.x-self.centroid[0])**2+(self.y-self.centroid[1])**2))
 
          return
          
@@ -58,14 +60,6 @@ class AnalyticSIELens(evil.GravitationalLens):
         self.alpha_y = (self.q/np.sqrt(1-self.q**2))*np.arctanh(np.sqrt((1-self.q**2)/(self.q**2*np.cos(image_theta)**2+np.sin(image_theta)**2))*np.sin(image_theta))
 
         return
-
-# ----------------------------------------------------------------------
-
-
-
-# ----------------------------------------------------------------------
-
-    #def raytrace(source_image):
 
 # ======================================================================
 

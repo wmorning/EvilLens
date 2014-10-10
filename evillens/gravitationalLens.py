@@ -51,7 +51,7 @@ class GravitationalLens(object):
  
 # ----------------------------------------------------------------------
 
-    def setup_grid(self,NX=None,NY=None,pixscale=None):
+    def setup_grid(self,NX=None,NY=None,pixscale=None, n=2 , offset=0.5):
         '''
         Make two arrays, x and y, that define the extent of the maps
         - pixscale is the size of a pixel, in arcsec.
@@ -62,11 +62,17 @@ class GravitationalLens(object):
             self.NY = NY
         if pixscale is not None: 
             self.pixscale = pixscale
+            
+        self.n = n
+        self.pixel_offset = offset*self.pixscale/self.n
                
         xgrid = np.arange(-self.NX/2.0,self.NX/2.0,1.0)*self.pixscale
         ygrid = np.arange(-self.NY/2.0,self.NY/2.0,1.0)*self.pixscale
-        self.x, self.y = np.meshgrid(xgrid,ygrid)
+        image_xgrid = np.arange(-self.NX/2.0,self.NX/2.0,1.0/self.n)*self.pixscale-self.pixel_offset
+        image_ygrid = np.arange(-self.NY/2.0,self.NY/2.0,1.0/self.n)*self.pixscale-self.pixel_offset
         
+        self.x, self.y = np.meshgrid(xgrid,ygrid)
+        self.image_x, self.image_y = np.meshgrid(image_xgrid,image_ygrid)
         return
         
 # ----------------------------------------------------------------------
@@ -194,7 +200,7 @@ class GravitationalLens(object):
         # Finish setting up the options.
         # 1) Images need extents, if x and y are not pixel numbers:
         options['extent'] = (np.min(self.x),np.max(self.x),\
-                             np.min(self.y),np.max(self.y))
+                                 np.min(self.y),np.max(self.y))
         # 2) The cubehelix map is linear grayscale on a BW printer
         options['cmap'] = plt.get_cmap('cubehelix')
         
@@ -228,13 +234,9 @@ class GravitationalLens(object):
 # ----------------------------------------------------------------------
 
     def write_kappa_to( self, fitsfile="kappa_map.fits"):
-        raise Exception("Can't write kappa map to fits yet.\n")
         
-        #hdu = fits.primary(self.kappa)
-        #if fitsfile = "*.fits":
-            #hdu.writeto(fitsfile)
-        #else:
-            #raise Exception("you must give a file name with a fits extension")
+        hdu = fits.PrimaryHDU(self.kappa)
+        hdu.writeto(fitsfile)
        
         return
         
