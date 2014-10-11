@@ -29,7 +29,7 @@ class GravitationalLens(object):
         self.compute_distances()
         
         # Make a default pixel grid:
-        self.setup_grid(NX=100,NY=100,pixscale=0.1)
+        self.setup_grid(NX=100,NY=100,pixscale=0.1, n=1,offset=0.5)
         
         return
 
@@ -51,10 +51,12 @@ class GravitationalLens(object):
  
 # ----------------------------------------------------------------------
 
-    def setup_grid(self,NX=None,NY=None,pixscale=None, n=2 , offset=0.5):
+    def setup_grid(self,NX=None,NY=None,pixscale=None, n=None , offset=None):
         '''
         Make two arrays, x and y, that define the extent of the maps
         - pixscale is the size of a pixel, in arcsec.
+        - n is oversampling factor between kappa and image maps
+        - offset is diagonal offset of kappa and image pixels
         '''
         if NX is not None: 
             self.NX = NX
@@ -62,21 +64,23 @@ class GravitationalLens(object):
             self.NY = NY
         if pixscale is not None: 
             self.pixscale = pixscale
+        if n is not None:
+            self.n = n
+        if offset is not None:
+            self.offset = offset
             
-
-               
         xgrid = np.arange(-self.NX/2.0,self.NX/2.0,1.0)*self.pixscale
         ygrid = np.arange(-self.NY/2.0,self.NY/2.0,1.0)*self.pixscale
         
         #WRM:  here we build new grid for the image and source pixels,
         #      purposefully misaligned with the kappa pixels, so no NaNs occur.        
-        self.n = n
-        self.pixel_offset = offset*self.pixscale/self.n
+        self.pixel_offset = self.offset*self.pixscale/self.n
         image_xgrid = np.arange(-self.NX/2.0,self.NX/2.0,1.0/self.n)*self.pixscale-self.pixel_offset
         image_ygrid = np.arange(-self.NY/2.0,self.NY/2.0,1.0/self.n)*self.pixscale-self.pixel_offset
         
         self.x, self.y = np.meshgrid(xgrid,ygrid)
         self.image_x, self.image_y = np.meshgrid(image_xgrid,image_ygrid)
+        self.NX_image,self.NY_image = self.image_x.shape
         return
         
 # ----------------------------------------------------------------------
@@ -143,14 +147,14 @@ class GravitationalLens(object):
         elif len(self.kappa.shape) == 2:
             
             #create empty arrays to be filled with x,y components of alpha
-            alpha_x = np.empty([self.NX,self.NY], float)
-            alpha_y = np.empty([self.NX,self.NY], float)
+            alpha_x = np.empty([self.NX_image,self.NY_image], float)
+            alpha_y = np.empty([self.NX_image,self.NY_image], float)
             
             #double for loop to get each point in array
             for i in range(len(alpha_x[:,0])):
                 for j in range(len(alpha_x[0,:])):
-                    alpha_x[i,j] =1/np.pi * np.nansum(self.kappa * (self.x[i,j]-self.x)/((self.x[i,j]-self.x)**2+(self.y[i,j]-self.y)**2)*self.pixscale**2)
-                    alpha_y[i,j] =1/ np.pi * np.nansum(self.kappa * (self.y[i,j]-self.y)/((self.x[i,j]-self.x)**2+(self.y[i,j]-self.y)**2)*self.pixscale**2)
+                    alpha_x[i,j] =1/np.pi * np.nansum(self.kappa * (self.image_x[i,j]-self.x)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
+                    alpha_y[i,j] =1/ np.pi * np.nansum(self.kappa * (self.image_y[i,j]-self.y)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
             self.alpha_x = alpha_x
             self.alpha_y = alpha_y
         else:
@@ -215,7 +219,15 @@ class GravitationalLens(object):
 
         # Plot a colored pixel map and overlay some contours:
         plt.imshow(img, **options)
-        plt.contour(self.x, self.y, img, levels,colors=('k',))
+        
+        
+        # WRM: Only plot contour map for kappa.  Skip for alpha.
+        if mapname == "kappa":
+            plt.contour(self.x, self.y, img, levels,colors=('k',))
+        else:
+            pass
+        
+        
         
         # Annotate the plot:
         plt.xlabel('x / arcsec')

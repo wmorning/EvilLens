@@ -22,7 +22,8 @@ class AnalyticSIELens(evil.GravitationalLens):
         super(AnalyticSIELens, self).__init__(*args, **kwargs)
         self.sigma = 70000.0 * units.km/units.s
         self.q = 0.75
-        self.centroid = [0.01,0.01]
+        self.centroid = [0.1,.01] #WRM: centroid offsets center of map from
+                                    #     origin to avoid divergence at a pixel
         
         return    
         
@@ -54,7 +55,7 @@ class AnalyticSIELens(evil.GravitationalLens):
         # y = np.sin(np.linspace(-self.yLength/2,self.yLength/2,self.Npixels)) * self.Dd /(1*units.Mpc) 
         # image_x, image_y = np.meshgrid(x,y)              
         
-        image_theta = np.arctan2(self.y,self.x) # check...
+        image_theta = np.arctan2(self.image_y-self.centroid[1],self.image_x-self.centroid[0]) # check...
 
         self.alpha_x = (self.q/np.sqrt(1-self.q**2))*np.arctan(np.sqrt((1-self.q**2)/(self.q**2*np.cos(image_theta)**2+np.sin(image_theta)**2))*np.cos(image_theta))
         self.alpha_y = (self.q/np.sqrt(1-self.q**2))*np.arctanh(np.sqrt((1-self.q**2)/(self.q**2*np.cos(image_theta)**2+np.sin(image_theta)**2))*np.sin(image_theta))
