@@ -22,7 +22,7 @@ class AnalyticSIELens(evil.GravitationalLens):
         super(AnalyticSIELens, self).__init__(*args, **kwargs)
         self.sigma = 70000.0 * units.km/units.s
         self.q = 0.75
-        self.centroid = [0.1,.01] #WRM: centroid offsets center of map from
+        self.centroid = [0.01,0.01] #WRM: centroid offsets center of map from
                                     #     origin to avoid divergence at a pixel
         
         return    
@@ -30,11 +30,6 @@ class AnalyticSIELens(evil.GravitationalLens):
 # ----------------------------------------------------------------------
  
     def build_kappa_map(self):
-         
-         # PJM: Grid now set up in base class, in arcsec...
-         # x = np.sin(np.linspace(-self.xLength/2,self.xLength/2,self.Npixels)) * self.Dd
-         # y = np.sin(np.linspace(-self.yLength/2,self.yLength/2,self.Npixels)) * self.Dd
-         # self.image_x, self.image_y = np.meshgrid(x,y)
          
          # First compute Einstein radius, in arcsec:
          Sigma_ellipsoid = self.sigma**2/(2.0*constants.G*self.Dd)  # Missing some things here...        
@@ -50,13 +45,10 @@ class AnalyticSIELens(evil.GravitationalLens):
         
     def deflect(self):
         
-        # PJM: Grid now set up in base class, in arcsec...
-        # x = np.sin(np.linspace(-self.xLength/2,self.xLength/2,self.Npixels)) * self.Dd /(1*units.Mpc)   
-        # y = np.sin(np.linspace(-self.yLength/2,self.yLength/2,self.Npixels)) * self.Dd /(1*units.Mpc) 
-        # image_x, image_y = np.meshgrid(x,y)              
-        
+        # First convert image coordinates to angle from semimajor axis.
         image_theta = np.arctan2(self.image_y-self.centroid[1],self.image_x-self.centroid[0]) # check...
 
+        # Deflect analytically
         self.alpha_x = (self.q/np.sqrt(1-self.q**2))*np.arctan(np.sqrt((1-self.q**2)/(self.q**2*np.cos(image_theta)**2+np.sin(image_theta)**2))*np.cos(image_theta))
         self.alpha_y = (self.q/np.sqrt(1-self.q**2))*np.arctanh(np.sqrt((1-self.q**2)/(self.q**2*np.cos(image_theta)**2+np.sin(image_theta)**2))*np.sin(image_theta))
 
