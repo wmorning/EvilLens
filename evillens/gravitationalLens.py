@@ -69,14 +69,14 @@ class GravitationalLens(object):
         if offset is not None:
             self.offset = offset
             
-        xgrid = np.arange(-self.NX/2.0,self.NX/2.0,1.0)*self.pixscale
-        ygrid = np.arange(-self.NY/2.0,self.NY/2.0,1.0)*self.pixscale
+        xgrid = np.arange(-self.NX/2.0,(self.NX)/2.0,1.0)*self.pixscale+self.pixscale
+        ygrid = np.arange(-self.NY/2.0,(self.NY)/2.0,1.0)*self.pixscale+self.pixscale
         
         #WRM:  here we build new grid for the image and source pixels,
         #      purposefully misaligned with the kappa pixels, so no NaNs occur.        
         self.pixel_offset = self.offset*self.pixscale/self.n
-        image_xgrid = np.arange(-self.NX/2.0,self.NX/2.0,1.0/self.n)*self.pixscale-self.pixel_offset
-        image_ygrid = np.arange(-self.NY/2.0,self.NY/2.0,1.0/self.n)*self.pixscale-self.pixel_offset
+        image_xgrid = np.arange(-self.NX/2.0,(self.NX)/2.0,1.0/self.n)*self.pixscale-self.pixel_offset
+        image_ygrid = np.arange(-self.NY/2.0,(self.NY)/2.0,1.0/self.n)*self.pixscale-self.pixel_offset
         
         self.x, self.y = np.meshgrid(xgrid,ygrid)
         self.image_x, self.image_y = np.meshgrid(image_xgrid,image_ygrid)
@@ -252,6 +252,10 @@ class GravitationalLens(object):
     def write_kappa_to( self, fitsfile="kappa_map.fits"):
         
         hdu = fits.PrimaryHDU(self.kappa)
+        
+        hdu.header['CDELT1'] = self.pixscale / 3600.0
+        hdu.header['CDELT2'] = self.pixscale / 3600.0
+        
         hdu.writeto(fitsfile)
        
         return
