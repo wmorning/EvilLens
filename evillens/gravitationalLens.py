@@ -23,13 +23,14 @@ class GravitationalLens(object):
         
         self.Zd = Zd
         self.Zs = Zs
+        self.source = None
 
         # Calculate distances and the critical density:
         self.cosmological = FlatLambdaCDM(H0=70, Om0=0.3)
         self.compute_distances()
         
         # Make a default pixel grid:
-        self.setup_grid(NX=100,NY=100,pixscale=0.1, n=1,offset=0.5)
+        self.setup_grid(NX=100,NY=100,pixscale=0.1, n=1.0,offset=0.5)
         
         return
 
@@ -178,13 +179,22 @@ class GravitationalLens(object):
                            vmin=-0.2, \
                            vmax=1.5)       
                            
+        elif mapname == "alpha":
+            img1 = self.alpha_x
+            img2 = self.alpha_y
+            levels = np.arange(-0.5,0.5,0.1)
+            options = dict(interpolation='nearest',\
+                           origin='lower',\
+                           vmin=-0.5, \
+                           vmax=0.5)
         elif mapname == "alpha_x":
             img = self.alpha_x
             levels = np.arange(-0.5,0.5,0.1)
             options = dict(interpolation='nearest',\
                            origin='lower',\
                            vmin=-0.5, \
-                           vmax=0.5)
+                           vmax=0.5)                           
+        
         elif mapname == "alpha_y":
             img = self.alpha_y
             levels = np.arange(-0.5,0.5,0.1)
@@ -195,8 +205,13 @@ class GravitationalLens(object):
         else:
              raise ValueError("unrecognized map name %s" % mapname)
         
-        # Generic figure setup:
-        px,py = 1,1
+        # set figure up for multiple plots:
+        if mapname == "alpha":
+            px,py = 2,1       
+        else:
+            px,py = 1,1
+        
+        
         figprops = dict(figsize=(5*px,5*py), dpi=128)
         adjustprops = dict(left=0.1,\
                            bottom=0.1,\
@@ -218,21 +233,35 @@ class GravitationalLens(object):
         plt.clf()
 
         # Plot a colored pixel map and overlay some contours:
-        plt.imshow(img, **options)
-        
-        
-        # WRM: Only plot contour map for kappa.  Skip for alpha.
+        # WRM: Also, only plot contour map for kappa.
         if mapname == "kappa":
+            plt.imshow(img, **options)
             plt.contour(self.x, self.y, img, levels,colors=('k',))
+        elif mapname =="alpha":
+            
+
+            plt.subplot(121)
+            plt.imshow(img1,**options)
+            plt.xlabel('x / arcsec')
+            plt.ylabel('y / arcsec')
+            plt.subplot(121).set_aspect('equal')
+            plt.subplot(122)
+            plt.xlabel('x / arcsec')
+            plt.subplot(122).set_aspect('equal')
+            plt.imshow(img2, **options) 
+            
+        elif mapname == "alpha_x":
+            plt.imshow(img, **options)
+        elif mapname == "alpha_y":
+            plt.imshow(img, **options)
         else:
             pass
         
         
-        
-        # Annotate the plot:
-        plt.xlabel('x / arcsec')
-        plt.ylabel('y / arcsec')
-        plt.axes().set_aspect('equal')
+#        # Annotate the plot:
+#        plt.xlabel('x / arcsec')
+#        plt.ylabel('y / arcsec')
+#        plt.axes().set_aspect('equal')
 
         # If we're in a notebook, display the plot. 
         # Otherwise, make a PNG.
@@ -262,8 +291,10 @@ class GravitationalLens(object):
         
 # ----------------------------------------------------------------------
 
-    def raytrace(source_image):
-        raise Exception("Can't do raytracing yet.\n")  
+    def raytrace(self):
+        
+        if self.source is None: 
+            raise Exception("Can't do raytracing yet.\n")  
         return
 
 # ======================================================================

@@ -22,7 +22,7 @@ class AnalyticSIELens(evil.GravitationalLens):
         super(AnalyticSIELens, self).__init__(*args, **kwargs)
         self.sigma = 70000.0 * units.km/units.s
         self.q = 0.75
-        self.centroid = [0.01,0.01] #WRM: centroid offsets center of map from
+        self.centroid = [0.01,0.01]  #WRM: centroid offsets center of map from
                                     #     origin to avoid divergence at a pixel
         
         return    
@@ -59,7 +59,7 @@ class AnalyticSIELens(evil.GravitationalLens):
 
 if __name__ == '__main__':
 
-    SIElens = evil.AnalyticSIELens(0.4,1.5)
+    SIElens = evil.AnalyticSIELens(0.4,1.5, q=0.75, centroid=[.01,.01])
     
     SIElens.deflect()
     print SIElens.alpha_x
