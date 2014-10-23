@@ -1,0 +1,96 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Oct 23 14:03:37 2014
+
+@author: warrenmorningstar
+"""
+# ======================================================================
+from astropy import units, constants
+import numpy as np
+import evillens as evil
+from astropy.io import fits
+
+# ======================================================================
+
+class Source(object):
+    
+    def __init__(self, Zs):  
+    
+        self.Zs = Zs
+    
+        return    
+# ----------------------------------------------------------------------
+    
+    def Read_Source_from(self, fitsfile):
+        '''
+        Read an image from a fitsfile, and setup its grid.  Here we need
+        to properly read in the wcs coordinate information so that the 
+        grid is spaced correctly. This means we have to extract the pixel 
+        scale from the FITS header.
+        '''
+        if fitsfile is None:
+            raise Exception("You need to provide an image.\n")
+            
+        hdulist = fits.open(fitsfile)
+        self.hdr = hdulist[0].header
+        self.source = hdulist[0].data
+        hdulist.close()
+        
+        assert len(self.source.shape) == 2
+        assert self.source.shape == (self.hdr['NAXIS1'],self.hdr['NAXIS2'])
+        self.NX,self.NY = self.source.shape
+        self.set_pixscale()
+        
+        # Set up a new pixel grid to go with this new kappa map:
+        self.setup_grid()
+        
+        return
+# ----------------------------------------------------------------------
+    
+    def setup_grid(self, NX=None, NY=None, pixscale=None):
+        '''
+        Make two arrays, x and y, that define the extent of the maps
+        - pixscale is the size of a pixel, in arcsec.
+        - 
+        '''
+        if NX is not None: 
+            self.NX = NX
+        if NY is not None: 
+            self.NY = NY
+        if pixscale is not None: 
+            self.pixscale = pixscale        
+        
+        xgrid = np.arange(-self.NX/2.0,(self.NX)/2.0,1.0)*self.pixscale+self.pixscale
+        ygrid = np.arange(-self.NY/2.0,(self.NY)/2.0,1.0)*self.pixscale+self.pixscale
+        
+        self.x, self.y = np.meshgrid(xgrid,ygrid)        
+        
+        return
+
+# ----------------------------------------------------------------------
+    
+    def set_pixscale(self):
+        
+        # Modern FITS files:
+        if 'CD1_1' in self.hdr.keys():            
+            determinant = self.hdr['CD1_1']*self.hdr['CD2_2'] \
+                          - self.hdr['CD1_2']*self.hdr['CD2_1']
+            self.pixscale = 3600.0*np.sqrt(np.abs(determinant))
+
+        # Older FITS files:
+        elif 'CDELT1' in self.hdr.keys():
+            self.pixscale = 3600.0*np.sqrt(np.abs(self.hdr['CDELT1']*self.hdr['CDELT2']))
+
+        # Simple FITS files with no WCS information (bad):
+        else:
+            self.pixscale = 1.0
+            
+        return        
+        
+        return
+
+# ----------------------------------------------------------------------
+ 
+        
+        
+# ======================================================================
