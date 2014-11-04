@@ -33,9 +33,10 @@ class AnalyticSIELens(evil.GravitationalLens):
          
          # First compute Einstein radius, in arcsec:
          b = 4*np.pi *(self.sigma/constants.c)**2*(np.sqrt(1-self.q**2)/np.arcsin(np.sqrt(1-self.q**2)))*self.Dds/self.Ds
+         
          self.b = b.decompose()
          
-         # Now compute kappa = thetaE/(2*theta) where theta = elliptical radial position
+         # Now compute kappa using lens equation from saas fe.
          self.kappa = self.b.value /(2.0*np.sqrt(self.q*(self.x-self.centroid[0])**2+(self.y-self.centroid[1])**2))
 
          return
@@ -52,7 +53,7 @@ class AnalyticSIELens(evil.GravitationalLens):
         #self.alpha_y = (self.b.value/np.sqrt(1-self.q**2))*np.arctanh(np.sqrt((1-self.q**2)/(self.q**2*np.cos(image_theta)**2+np.sin(image_theta)**2))*np.sin(image_theta))
         
         self.alpha_x = (self.b.value/np.sqrt(1-self.q**2)) * np.arctan((self.image_x-self.centroid[0])*np.sqrt(1-self.q**2)/np.sqrt(self.q**2*(self.image_x-self.centroid[0])**2+(self.image_y-self.centroid[1])**2))        
-        self.alpha_y = (self.b.value/np.sqrt(1-self.q**2)) * np.arctan((self.image_y-self.centroid[1])*np.sqrt(1-self.q**2)/np.sqrt(self.q**2*(self.image_x-self.centroid[0])**2+(self.image_y-self.centroid[1])**2))
+        self.alpha_y = (self.b.value/np.sqrt(1-self.q**2)) * np.arctanh((self.image_y-self.centroid[1])*np.sqrt(1-self.q**2)/np.sqrt(self.q**2*(self.image_x-self.centroid[0])**2+(self.image_y-self.centroid[1])**2))
         return
 
 # ======================================================================
