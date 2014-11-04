@@ -1,14 +1,13 @@
-# -*- coding: utf-8 -*-
 """
-Created on Thu Oct 23 14:03:37 2014
-
-@author: warrenmorningstar
+An object class to exist as part of a gravitational lens system
+should be able to load itself from a file, know its own redshift
+know its own x and y grid coordinates, and be able to interpret
+between their pixel size and physical scale in arcsec.
 """
 # ======================================================================
-from astropy import units, constants
+
 import numpy as np
-import evillens as evil
-from astropy.io import fits
+from astropy.io import fits 
 
 # ======================================================================
 
@@ -33,12 +32,13 @@ class Source(object):
             
         hdulist = fits.open(fitsfile)
         self.hdr = hdulist[0].header
-        self.source = hdulist[0].data
+        self.intensity = hdulist[0].data
         hdulist.close()
+              
         
-        assert len(self.source.shape) == 2
-        assert self.source.shape == (self.hdr['NAXIS1'],self.hdr['NAXIS2'])
-        self.NX,self.NY = self.source.shape
+        assert len(self.intensity.shape) == 2
+        assert self.intensity.shape == (self.hdr['NAXIS1'],self.hdr['NAXIS2'])
+        self.NX,self.NY = self.intensity.shape
         self.set_pixscale()
         
         # Set up a new pixel grid to go with this new kappa map:
@@ -63,7 +63,7 @@ class Source(object):
         xgrid = np.arange(-self.NX/2.0,(self.NX)/2.0,1.0)*self.pixscale+self.pixscale
         ygrid = np.arange(-self.NY/2.0,(self.NY)/2.0,1.0)*self.pixscale+self.pixscale
         
-        self.x, self.y = np.meshgrid(xgrid,ygrid)        
+        self.beta_x, self.beta_y = np.meshgrid(xgrid,ygrid)        
         
         return
 
@@ -86,8 +86,6 @@ class Source(object):
             self.pixscale = 1.0
             
         return        
-        
-        return
 
 # ----------------------------------------------------------------------
  
