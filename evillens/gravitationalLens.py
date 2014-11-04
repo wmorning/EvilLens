@@ -12,6 +12,8 @@ from astropy.cosmology import FlatLambdaCDM
 from astropy.io import fits
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.spatial
+from scipy.integrate import simps
 
 # ======================================================================
 
@@ -24,13 +26,16 @@ class GravitationalLens(object):
         self.Zd = Zd
         self.Zs = Zs
         self.source = None
+        self.alpha_x = None
+        self.alpha_y = None
+        self.kappa = None
 
         # Calculate distances and the critical density:
         self.cosmological = FlatLambdaCDM(H0=70, Om0=0.3)
         self.compute_distances()
         
         # Make a default pixel grid:
-        self.setup_grid(NX=100,NY=100,pixscale=0.1, n=1.0,offset=0.5)
+        self.setup_grid(NX=100,NY=100,pixscale=0.1, n=1,offset=0.5)
         
         return
 
@@ -76,8 +81,8 @@ class GravitationalLens(object):
         #WRM:  here we build new grid for the image and source pixels,
         #      purposefully misaligned with the kappa pixels, so no NaNs occur.        
         self.pixel_offset = self.offset*self.pixscale/self.n
-        image_xgrid = np.arange(-self.NX/2.0,(self.NX)/2.0,1.0/self.n)*self.pixscale-self.pixel_offset
-        image_ygrid = np.arange(-self.NY/2.0,(self.NY)/2.0,1.0/self.n)*self.pixscale-self.pixel_offset
+        image_xgrid = np.arange(-self.NX/2.0,(self.NX)/2.0,1.0/self.n)*self.pixscale+self.pixscale-self.pixel_offset
+        image_ygrid = np.arange(-self.NY/2.0,(self.NY)/2.0,1.0/self.n)*self.pixscale+self.pixscale-self.pixel_offset
         
         self.x, self.y = np.meshgrid(xgrid,ygrid)
         self.image_x, self.image_y = np.meshgrid(image_xgrid,image_ygrid)
@@ -154,8 +159,33 @@ class GravitationalLens(object):
             #double for loop to get each point in array
             for i in range(len(alpha_x[:,0])):
                 for j in range(len(alpha_x[0,:])):
-                    alpha_x[i,j] =1/np.pi * np.nansum(self.kappa * (self.image_x[i,j]-self.x)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
-                    alpha_y[i,j] =1/ np.pi * np.nansum(self.kappa * (self.image_y[i,j]-self.y)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
+                    
+                    #integrand1 = 1/np.pi *self.kappa * (self.image_x[i,j]-self.x)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)
+                    #integrand2 = 1/np.pi *self.kappa * (self.image_y[i,j]-self.y)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)               
+                    
+                    alpha_x[i,j] = simps(simps(1/np.pi *self.kappa * (self.image_x[i,j]-self.x)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2),self.x[0,:]),self.y[:,0])
+                    alpha_y[i,j] = simps(simps(1/np.pi *self.kappa * (self.image_y[i,j]-self.y)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2),self.x[0,:]),self.y[:,0])
+                    
+#                    alpha_x[i,j] = self.pixscale**2/(4.0*np.pi)*(integrand1[0,0]\
+#                    +integrand1[self.NX-1,0]+integrand1[0,self.NY-1]\
+#                    +integrand1[self.NX-1,self.NY-1]\
+#                    +2.0*np.nansum(integrand1[0,1:self.NY-1]))\
+#                    +2.0*np.nansum(integrand1[1:self.NX-1,0])\
+#                    +2.0*np.nansum(integrand1[self.NX-1,1:self.NY-1]\
+#                    +2.0*np.nansum(integrand1[1:self.NX-1,self.NY-1])\
+#                    +4.0*np.nansum(integrand1[1:self.NX-1,1:self.NY-1]))
+#                    
+#                    alpha_y[i,j] = self.pixscale**2/(4.0*np.pi)*(integrand2[0,0]\
+#                    +integrand2[self.NX-1,0]+integrand2[0,self.NY-1]\
+#                    +integrand2[self.NX-1,self.NY-1]\
+#                    +2.0*np.nansum(integrand2[0,1:self.NY-1]))\
+#                    +2.0*np.nansum(integrand2[1:self.NX-1,0])\
+#                    +2.0*np.nansum(integrand2[self.NX-1,1:self.NY-1]\
+#                    +2.0*np.nansum(integrand2[1:self.NX-1,self.NY-1])\
+#                    +4.0*np.nansum(integrand2[1:self.NX-1,1:self.NY-1]))
+#                                        
+                    #alpha_x[i,j] =1/np.pi * np.nansum(self.kappa * (self.image_x[i,j]-self.x)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
+                    #alpha_y[i,j] =1/ np.pi * np.nansum(self.kappa * (self.image_y[i,j]-self.y)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
             self.alpha_x = alpha_x
             self.alpha_y = alpha_y
         else:
@@ -202,6 +232,19 @@ class GravitationalLens(object):
                            origin='lower',\
                            vmin=-0.5, \
                            vmax=0.5)
+                           
+        elif mapname == "lensed image":
+            img = self.image
+            options = dict(interpolation='nearest',\
+                           origin='lower',\
+                           vmin=-0.2, \
+                           vmax=1.5)
+        elif mapname == "non-lensed image":
+            img = self.source.intensity
+            options = dict(interpolation='nearest',\
+                           origin='lower',\
+                           vmin=-0.2, \
+                           vmax=1.5)
         else:
              raise ValueError("unrecognized map name %s" % mapname)
         
@@ -237,6 +280,8 @@ class GravitationalLens(object):
         if mapname == "kappa":
             plt.imshow(img, **options)
             plt.contour(self.x, self.y, img, levels,colors=('k',))
+            plt.xlabel('x / arcsec')
+            plt.ylabel('y / arcsec')
         elif mapname =="alpha":
             
 
@@ -252,16 +297,25 @@ class GravitationalLens(object):
             
         elif mapname == "alpha_x":
             plt.imshow(img, **options)
+            plt.xlabel('x / arcsec')
+            plt.ylabel('y / arcsec')
         elif mapname == "alpha_y":
             plt.imshow(img, **options)
+            plt.xlabel('x / arcsec')
+            plt.ylabel('y / arcsec')
+            
+        elif mapname == "lensed image":
+            plt.imshow(img,**options)
+            plt.xlabel('x / arcsec')
+            plt.ylabel('y / arcsec')
+            
+        elif mapname == "non-lensed image":
+            plt.imshow(img, **options)
+            plt.xlabel('x / arcsec')
+            plt.ylabel('y / arcsec')
         else:
             pass
         
-        
-#        # Annotate the plot:
-#        plt.xlabel('x / arcsec')
-#        plt.ylabel('y / arcsec')
-#        plt.axes().set_aspect('equal')
 
         # If we're in a notebook, display the plot. 
         # Otherwise, make a PNG.
@@ -295,6 +349,28 @@ class GravitationalLens(object):
         
         if self.source is None: 
             raise Exception("Can't do raytracing yet.\n")  
+            
+        else:
+            
+            #  first create empty image with dimensions NX, NY (for simplicity's
+            #  sake, we should make this more general later)  
+            self.image = np.empty([self.NX,self.NY],float)
+            theta_x = np.arange(-self.NX/2,self.NX/2,1.0)*self.pixscale+self.pixscale
+            theta_y = np.arange(-self.NY/2,self.NY/2,1.0)*self.pixscale+self.pixscale
+            self.theta_x,self.theta_y = np.meshgrid(theta_x,theta_y)              
+            
+            #Find the original angles in the source plane              
+            self.beta_x = self.theta_x-self.alpha_x
+            self.beta_y = self.theta_y-self.alpha_y
+            
+            #Find the intensity at each angle in the source plane, and record
+            #  it to self.image
+            for i in range(self.NX):
+                for j in range(self.NY):
+                    k = np.argmin((self.beta_x[i,j]-self.source.beta_x[0,:])**2)
+                    l = np.argmin((self.beta_y[i,j]-self.source.beta_y[:,0])**2)
+                    self.image[i,j] = self.source.intensity[l,k]
+ 
         return
 
 # ======================================================================
