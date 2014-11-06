@@ -225,16 +225,30 @@ class GravitationalLens(object):
                            
         elif mapname == "lensed image":
             img = self.image
-            options = dict(interpolation='nearest',\
-                           origin='upper',\
-                           vmin=np.min(self.image)*0.95, \
-                           vmax=np.max(self.image)*0.95)
+            print((np.max(self.image) - np.min(self.image))/np.min(self.image))
+            if (np.max(self.image)-np.average(self.image))/np.average(self.image) < 1:
+                options = dict(interpolation='nearest',\
+                               origin='upper',\
+                               vmin=np.min(self.image)*0.95, \
+                               vmax=np.max(self.image)*0.95)
+            else:
+                options = dict(interpolation='nearest',\
+                               origin='upper',\
+                               vmin=-0.2, \
+                               vmax=np.average(self.image)*5.0)
+                               
         elif mapname == "non-lensed image":
             img = self.source.intensity
-            options = dict(interpolation='nearest',\
-                           origin='upper',\
-                           vmin=np.min(self.image)*0.95, \
-                           vmax=np.max(self.source.intensity)*0.95)
+            if (np.max(self.image)-np.average(self.image))/np.average(self.image) < 1:
+                options = dict(interpolation='nearest',\
+                               origin='upper',\
+                               vmin=np.min(self.image)*0.95, \
+                               vmax=np.max(self.image)*0.95)
+            else:
+                options = dict(interpolation='nearest',\
+                               origin='upper',\
+                               vmin=-0.2, \
+                               vmax=np.average(self.image)*5.0)
         else:
              raise ValueError("unrecognized map name %s" % mapname)
         
@@ -375,8 +389,7 @@ class GravitationalLens(object):
     def __add__(self,right):
         #raise Exception("Cannot add lenses yet.\n")
         if type(right) is not GravitationalLens:
-            raise TypeError('unsupported operand type(s) for +'+
-                            ': \''+type_as_str(self)+'\' and \''+type_as_str(right)+'\'')
+            raise TypeError('unsupported operand type(s)')
         assert len(self.kappa.shape) == len(right.kappa.shape)
         assert self.kappa.shape == right.kappa.shape
         assert abs(self.pixscale - right.pixscale) <10**-10
@@ -396,6 +409,32 @@ class GravitationalLens(object):
         
         
         return(newLens)
+        
+# ----------------------------------------------------------------------
+        
+    def __sub__(self,right):
+        #raise Exception("Cannot subtract lenses yet.\n")
+        if type(right) is not GravitationalLens:
+            raise TypeError('unsupported operand type(s)')
+        assert len(self.kappa.shape) == len(right.kappa.shape)
+        assert self.kappa.shape == right.kappa.shape
+        assert abs(self.pixscale - right.pixscale) <10**-10
+        
+        newLens = GravitationalLens(self.Zd,self.Zs)
+        newLens.NX,newLens.NY = self.kappa.shape
+        newLens.pixscale = self.pixscale
+        
+        # Set up a new pixel grid to go with this new kappa map:
+        newLens.setup_grid()        
+        
+        if self.kappa is not None and right.kappa is not None:
+            newLens.kappa = self.kappa -right.kappa
+        if self.alpha_x is not None and right.alpha_x is not None:
+            newLens.alpha_x = self.alpha_x - right.alpha_x
+            newLens.alpha_y = self.alpha_y - right.alpha_y
+        
+        return(newLens)
+        
 # ======================================================================
 
 if __name__ == '__main__':
