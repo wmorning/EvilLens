@@ -225,7 +225,7 @@ class GravitationalLens(object):
                            
         elif mapname == "lensed image":
             img = self.image
-            print((np.max(self.image) - np.min(self.image))/np.min(self.image))
+            
             if (np.max(self.image)-np.average(self.image))/np.average(self.image) < 1:
                 options = dict(interpolation='nearest',\
                                origin='upper',\
