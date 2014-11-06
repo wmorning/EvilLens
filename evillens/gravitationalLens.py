@@ -74,19 +74,25 @@ class GravitationalLens(object):
             self.n = n
         if offset is not None:
             self.offset = offset
-            
+        
+        
+        #build grid for kappa map
         xgrid = np.arange(-self.NX/2.0,(self.NX)/2.0,1.0)*self.pixscale+self.pixscale
         ygrid = np.arange(-self.NY/2.0,(self.NY)/2.0,1.0)*self.pixscale+self.pixscale
+        self.x, self.y = np.meshgrid(xgrid,ygrid)        
+        
         
         #WRM:  here we build new grid for the image and source pixels,
         #      purposefully misaligned with the kappa pixels, so no NaNs occur.        
         self.pixel_offset = self.offset*self.pixscale/self.n
         image_xgrid = np.arange(-self.NX/2.0,(self.NX)/2.0,1.0/self.n)*self.pixscale+self.pixscale-self.pixel_offset
         image_ygrid = np.arange(-self.NY/2.0,(self.NY)/2.0,1.0/self.n)*self.pixscale+self.pixscale-self.pixel_offset
-        
-        self.x, self.y = np.meshgrid(xgrid,ygrid)
         self.image_x, self.image_y = np.meshgrid(image_xgrid,image_ygrid)
-        self.NX_image,self.NY_image = self.image_x.shape
+        self.NX_image,self.NY_image = self.image_x.shape        
+        
+        
+        
+        
         return
         
 # ----------------------------------------------------------------------
@@ -160,30 +166,14 @@ class GravitationalLens(object):
             for i in range(len(alpha_x[:,0])):
                 for j in range(len(alpha_x[0,:])):
                     
-                    #integrand1 = 1/np.pi *self.kappa * (self.image_x[i,j]-self.x)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)
-                    #integrand2 = 1/np.pi *self.kappa * (self.image_y[i,j]-self.y)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)               
-                    
-                    alpha_x[i,j] = simps(simps(1/np.pi *self.kappa * (self.image_x[i,j]-self.x)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2),self.x[0,:]),self.y[:,0])
-                    alpha_y[i,j] = simps(simps(1/np.pi *self.kappa * (self.image_y[i,j]-self.y)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2),self.x[0,:]),self.y[:,0])
-                    
-#                    alpha_x[i,j] = self.pixscale**2/(4.0*np.pi)*(integrand1[0,0]\
-#                    +integrand1[self.NX-1,0]+integrand1[0,self.NY-1]\
-#                    +integrand1[self.NX-1,self.NY-1]\
-#                    +2.0*np.nansum(integrand1[0,1:self.NY-1]))\
-#                    +2.0*np.nansum(integrand1[1:self.NX-1,0])\
-#                    +2.0*np.nansum(integrand1[self.NX-1,1:self.NY-1]\
-#                    +2.0*np.nansum(integrand1[1:self.NX-1,self.NY-1])\
-#                    +4.0*np.nansum(integrand1[1:self.NX-1,1:self.NY-1]))
-#                    
-#                    alpha_y[i,j] = self.pixscale**2/(4.0*np.pi)*(integrand2[0,0]\
-#                    +integrand2[self.NX-1,0]+integrand2[0,self.NY-1]\
-#                    +integrand2[self.NX-1,self.NY-1]\
-#                    +2.0*np.nansum(integrand2[0,1:self.NY-1]))\
-#                    +2.0*np.nansum(integrand2[1:self.NX-1,0])\
-#                    +2.0*np.nansum(integrand2[self.NX-1,1:self.NY-1]\
-#                    +2.0*np.nansum(integrand2[1:self.NX-1,self.NY-1])\
-#                    +4.0*np.nansum(integrand2[1:self.NX-1,1:self.NY-1]))
-#                                        
+                    # calculate deflection angles using simpsons rule.  Uses
+                    # pixscale as dx.  (more generally, can be made to use x,y 
+                    # coordinate arrays to determine dx, dy but this is 2x slower)
+                    alpha_x[i,j] = simps(simps(1/np.pi *self.kappa * (self.image_x[i,j]-self.x)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2),dx = self.pixscale),dx = self.pixscale)
+                    alpha_y[i,j] = simps(simps(1/np.pi *self.kappa * (self.image_y[i,j]-self.y)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2),dx = self.pixscale),dx = self.pixscale)
+                     
+                    # old way (crude rectangle rule. Much quicker than simpson's
+                    # rule for some reason.  Keep for now.) 
                     #alpha_x[i,j] =1/np.pi * np.nansum(self.kappa * (self.image_x[i,j]-self.x)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
                     #alpha_y[i,j] =1/ np.pi * np.nansum(self.kappa * (self.image_y[i,j]-self.y)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
             self.alpha_x = alpha_x
@@ -236,15 +226,15 @@ class GravitationalLens(object):
         elif mapname == "lensed image":
             img = self.image
             options = dict(interpolation='nearest',\
-                           origin='lower',\
-                           vmin=-0.2, \
-                           vmax=1.5)
+                           origin='upper',\
+                           vmin=np.min(self.image)*0.95, \
+                           vmax=np.max(self.image)*0.95)
         elif mapname == "non-lensed image":
             img = self.source.intensity
             options = dict(interpolation='nearest',\
-                           origin='lower',\
-                           vmin=-0.2, \
-                           vmax=1.5)
+                           origin='upper',\
+                           vmin=np.min(self.image)*0.95, \
+                           vmax=np.max(self.source.intensity)*0.95)
         else:
              raise ValueError("unrecognized map name %s" % mapname)
         
@@ -310,6 +300,8 @@ class GravitationalLens(object):
             plt.ylabel('y / arcsec')
             
         elif mapname == "non-lensed image":
+            options['extent'] = (np.min(self.source.beta_x),np.max(self.source.beta_x),\
+                                 np.min(self.source.beta_y),np.max(self.source.beta_y))
             plt.imshow(img, **options)
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec')
@@ -352,14 +344,19 @@ class GravitationalLens(object):
             
         else:
             
-            #  first create empty image with dimensions NX, NY (for simplicity's
-            #  sake, we should make this more general later)  
+            #  first create empty image with dimensions NX, NY
+            #  (we should make this more general later)  
             self.image = np.empty([self.NX,self.NY],float)
+            
+            #  give each pixel in the image an x,y position to correspond to
+            #  (Again note:  the pixel grid we create now forces the image
+            #   to be perfectly alligned with the kappa map, which it need 
+            #   not be.  Make this more general later)
             theta_x = np.arange(-self.NX/2,self.NX/2,1.0)*self.pixscale+self.pixscale
             theta_y = np.arange(-self.NY/2,self.NY/2,1.0)*self.pixscale+self.pixscale
             self.theta_x,self.theta_y = np.meshgrid(theta_x,theta_y)              
             
-            #Find the original angles in the source plane              
+            #Find the corresponding angles in the source plane              
             self.beta_x = self.theta_x-self.alpha_x
             self.beta_y = self.theta_y-self.alpha_y
             
@@ -373,6 +370,32 @@ class GravitationalLens(object):
  
         return
 
+# ---------------------------------------------------------------------
+
+    def __add__(self,right):
+        #raise Exception("Cannot add lenses yet.\n")
+        if type(right) is not GravitationalLens:
+            raise TypeError('unsupported operand type(s) for +'+
+                            ': \''+type_as_str(self)+'\' and \''+type_as_str(right)+'\'')
+        assert len(self.kappa.shape) == len(right.kappa.shape)
+        assert self.kappa.shape == right.kappa.shape
+        assert abs(self.pixscale - right.pixscale) <10**-10
+        
+        newLens = GravitationalLens(self.Zd,self.Zs)
+        newLens.NX,newLens.NY = self.kappa.shape
+        newLens.pixscale = self.pixscale
+        
+        # Set up a new pixel grid to go with this new kappa map:
+        newLens.setup_grid()        
+        
+        if self.kappa is not None and right.kappa is not None:
+            newLens.kappa = self.kappa+right.kappa
+        if self.alpha_x is not None and right.alpha_x is not None:
+            newLens.alpha_x = self.alpha_x+right.alpha_x
+            newLens.alpha_y = self.alpha_y+right.alpha_y
+        
+        
+        return(newLens)
 # ======================================================================
 
 if __name__ == '__main__':
