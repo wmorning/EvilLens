@@ -12,7 +12,7 @@ from astropy.cosmology import FlatLambdaCDM
 from astropy.io import fits
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy.spatial
+from scipy import interpolate
 from scipy.integrate import simps
 
 # ======================================================================
@@ -228,12 +228,12 @@ class GravitationalLens(object):
             
             if (np.max(self.image)-np.average(self.image))/np.average(self.image) < 1:
                 options = dict(interpolation='nearest',\
-                               origin='upper',\
+                               origin='lower',\
                                vmin=np.min(self.image)*0.95, \
                                vmax=np.max(self.image)*0.95)
             else:
                 options = dict(interpolation='nearest',\
-                               origin='upper',\
+                               origin='lower',\
                                vmin=-0.2, \
                                vmax=np.average(self.image)*5.0)
                                
@@ -241,12 +241,12 @@ class GravitationalLens(object):
             img = self.source.intensity
             if (np.max(self.image)-np.average(self.image))/np.average(self.image) < 1:
                 options = dict(interpolation='nearest',\
-                               origin='upper',\
+                               origin='lower',\
                                vmin=np.min(self.image)*0.95, \
                                vmax=np.max(self.image)*0.95)
             else:
                 options = dict(interpolation='nearest',\
-                               origin='upper',\
+                               origin='lower',\
                                vmin=-0.2, \
                                vmax=np.average(self.image)*5.0)
         else:
@@ -374,21 +374,30 @@ class GravitationalLens(object):
             self.beta_x = self.theta_x-self.alpha_x
             self.beta_y = self.theta_y-self.alpha_y
             
+            #create bilinear interpolation function (assumes uniform grid of x,y)
+            f_interpolation = interpolate.RectBivariateSpline(self.source.beta_y[:,0],self.source.beta_x[0,:],self.source.intensity,kx=1,ky=1)            
+            
             #Find the intensity at each angle in the source plane, and record
             #  it to self.image
+            
+            #image = f_interpolation(self.beta_y.ravel(),self.beta_x.ravel())
+           # self.image = np.reshape(image,(self.NX,self.NY))
             for i in range(self.NX):
                 for j in range(self.NY):
-                    k = np.argmin((self.beta_x[i,j]-self.source.beta_x[0,:])**2)
-                    l = np.argmin((self.beta_y[i,j]-self.source.beta_y[:,0])**2)
-                    self.image[i,j] = self.source.intensity[l,k]
- 
+                    #k = np.argmin((self.beta_x[i,j]-self.source.beta_x[0,:])**2)
+                    #l = np.argmin((self.beta_y[i,j]-self.source.beta_y[:,0])**2)
+                    #self.image[i,j] = self.source.intensity[l,k]
+                    
+                    #use interpolation function to create observed image                 
+                    self.image[i,j] = f_interpolation(self.beta_y[i,j],self.beta_x[i,j])
+#                    
         return
 
 # ---------------------------------------------------------------------
 
     def __add__(self,right):
         #raise Exception("Cannot add lenses yet.\n")
-        if type(right) is not GravitationalLens:
+        if issubclass(type(self),type(right)) is False and issubclass(type(right),type(self)) is False :
             raise TypeError('unsupported operand type(s)')
         assert len(self.kappa.shape) == len(right.kappa.shape)
         assert self.kappa.shape == right.kappa.shape
@@ -414,7 +423,7 @@ class GravitationalLens(object):
         
     def __sub__(self,right):
         #raise Exception("Cannot subtract lenses yet.\n")
-        if type(right) is not GravitationalLens:
+        if issubclass(type(self),type(right)) is False:
             raise TypeError('unsupported operand type(s)')
         assert len(self.kappa.shape) == len(right.kappa.shape)
         assert self.kappa.shape == right.kappa.shape
