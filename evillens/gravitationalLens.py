@@ -348,6 +348,16 @@ class GravitationalLens(object):
 # ----------------------------------------------------------------------
 
     def raytrace(self):
+        '''
+        Create observed image grid, then use lens equation to find
+        angles in the source plane.  Use bilinear interpolation to
+        get intensity at each observed image pixel.
+        
+        This function works for 2 dimensional (single color) and
+        3 dimensional (multicolor) images.  Interpolation is done
+        for each color channel image separately and independently.
+        '''       
+        
         
         if self.source is None: 
             raise Exception("Can't do raytracing yet.\n")  
@@ -363,8 +373,7 @@ class GravitationalLens(object):
             self.beta_x = self.theta_x-self.alpha_x
             self.beta_y = self.theta_y-self.alpha_y            
             
-            # if the source image is single wavelength, interpolate to find the 
-            # source image.
+            # single wavelength
             if len(self.source.intensity.shape) ==2:
                 
                 #  first create empty image with dimensions NX, NY
@@ -376,14 +385,10 @@ class GravitationalLens(object):
             
                 #interpolate for observed intensity at each angle            
                 for i in range(self.NX):
-                    for j in range(self.NY):
-                       #k = np.argmin((self.beta_x[i,j]-self.source.beta_x[0,:])**2)
-                       #l = np.argmin((self.beta_y[i,j]-self.source.beta_y[:,0])**2)
-                       #self.image[i,j] = self.source.intensity[l,k]
-                    
+                    for j in range(self.NY):                    
                        self.image[i,j] = f_interpolation(self.beta_y[i,j],self.beta_x[i,j])
                 
-            else:   #if source image is a data cube, have to treat multiple colors
+            else:   #multiwavelength data cube
                 self.image = np.empty([self.source.Naxes,self.NX,self.NY], float)
                 
                 for i in range(self.source.Naxes):
@@ -392,12 +397,7 @@ class GravitationalLens(object):
                     for j in range(self.NX):
                         for k in range(self.NY):
                             self.image[i,j,k] = f_interpolation(self.beta_y[j,k],self.beta_x[j,k])
-                            #Warning, this methond is currenly built 
-                            #for rgb images.  Normally shouldn't have
-                            # int built in (since interpolations just estimate)
-                            # the flux in some band.
                             
-              
         return
 
 # ---------------------------------------------------------------------
