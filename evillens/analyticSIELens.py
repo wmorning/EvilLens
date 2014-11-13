@@ -29,16 +29,28 @@ class AnalyticSIELens(evil.GravitationalLens):
         
 # ----------------------------------------------------------------------
  
-    def build_kappa_map(self):
+    def build_kappa_map(self, sigma=None,q=None,centroid=None):
+        '''
+        Create kappa map using current parameters.  Also allows 
+        user to manually set lens parameters if they want to.
+        '''
+        if sigma is not None:
+            self.sigma = sigma * units.km/units.s
+        if q is not None:
+            self.q = q
+        if centroid is not None:
+            assert len(centroid)==2
+            self.centroid = centroid
          
-         # First compute Einstein radius, in arcsec:
-         b = 4*np.pi *(self.sigma/constants.c)**2*(np.sqrt(1-self.q**2)/np.arcsin(np.sqrt(1-self.q**2)))*self.Dds/self.Ds
-         self.b = b.decompose()*(3600.0*180.0/np.pi)
+         
+        # First compute Einstein radius, in arcsec:
+        b = 4*np.pi *(self.sigma/constants.c)**2*(np.sqrt(1-self.q**2)/np.arcsin(np.sqrt(1-self.q**2)))*self.Dds/self.Ds
+        self.b = b.decompose()*(3600.0*180.0/np.pi)
          
          # Now compute kappa using lens equation from Saas Fe.
-         self.kappa = self.b.value /(2.0*np.sqrt(self.q*(self.x-self.centroid[0])**2+(self.y-self.centroid[1])**2))
+        self.kappa = self.b.value /(2.0*np.sqrt(self.q*(self.x-self.centroid[0])**2+(self.y-self.centroid[1])**2))
 
-         return
+        return
          
 # ----------------------------------------------------------------------
         
