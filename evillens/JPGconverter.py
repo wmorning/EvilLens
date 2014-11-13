@@ -26,9 +26,16 @@ def JPG_to_FITS(jpgimage):
     npg = np.reshape(gdata, (ysize, xsize))
     npb = np.reshape(bdata, (ysize, xsize))
     
-    magnitude = np.sqrt(npr**2+npg**2+npb**2)
+    datacube = np.empty([3,ysize,xsize])
+    datacube[0,...] = npr[::-1,...]
+    datacube[1,...] = npg[::-1,...]
+    datacube[2,...] = npb[::-1,...]
     
-    hdu = fits.PrimaryHDU(data=magnitude)
+    magnitude_inverted = np.sqrt(npr**2+npg**2+npb**2)
+    
+    magnitude = magnitude_inverted[::-1,...]
+    
+    hdu = fits.PrimaryHDU(data=datacube)
     hdu.header['CDELT1'] = 9.0/ysize/3600.0
     hdu.header['CDELT2'] = 9.0/ysize/3600.0
     hdu.header['NAXIS1'],hdu.header['NAXIS2'] = magnitude.shape
@@ -36,7 +43,6 @@ def JPG_to_FITS(jpgimage):
     hdu.writeto('output.fits', clobber=True)
     
     print(hdu.header)
-    print(hdu.filename())
     
-    return 
+    return(datacube)
     

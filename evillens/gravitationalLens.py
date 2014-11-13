@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from scipy import interpolate
 from scipy.integrate import simps
 
+
 # ======================================================================
 
 class GravitationalLens(object):
@@ -225,7 +226,7 @@ class GravitationalLens(object):
                            
         elif mapname == "lensed image":
             img = self.image
-            
+            #This statement sets contrast based on the type of image.
             if (np.max(self.image)-np.average(self.image))/np.average(self.image) < 1:
                 options = dict(interpolation='nearest',\
                                origin='lower',\
@@ -239,6 +240,7 @@ class GravitationalLens(object):
                                
         elif mapname == "non-lensed image":
             img = self.source.intensity
+            #same as for lensed image, here we guess for the contrast.
             if (np.max(self.image)-np.average(self.image))/np.average(self.image) < 1:
                 options = dict(interpolation='nearest',\
                                origin='lower',\
@@ -279,16 +281,13 @@ class GravitationalLens(object):
         fig.subplots_adjust(**adjustprops)
         plt.clf()
 
-        # Plot a colored pixel map and overlay some contours:
-        # WRM: Also, only plot contour map for kappa.
+        # Plot a colored pixel map.  Options determined for each type of map
         if mapname == "kappa":
             plt.imshow(img, **options)
             plt.contour(self.x, self.y, img, levels,colors=('k',))
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec')
         elif mapname =="alpha":
-            
-
             plt.subplot(121)
             plt.imshow(img1,**options)
             plt.xlabel('x / arcsec')
@@ -297,8 +296,7 @@ class GravitationalLens(object):
             plt.subplot(122)
             plt.xlabel('x / arcsec')
             plt.subplot(122).set_aspect('equal')
-            plt.imshow(img2, **options) 
-            
+            plt.imshow(img2, **options)             
         elif mapname == "alpha_x":
             plt.imshow(img, **options)
             plt.xlabel('x / arcsec')
@@ -306,13 +304,11 @@ class GravitationalLens(object):
         elif mapname == "alpha_y":
             plt.imshow(img, **options)
             plt.xlabel('x / arcsec')
-            plt.ylabel('y / arcsec')
-            
+            plt.ylabel('y / arcsec')            
         elif mapname == "lensed image":
             plt.imshow(img,**options)
             plt.xlabel('x / arcsec')
-            plt.ylabel('y / arcsec')
-            
+            plt.ylabel('y / arcsec')            
         elif mapname == "non-lensed image":
             options['extent'] = (np.min(self.source.beta_x),np.max(self.source.beta_x),\
                                  np.min(self.source.beta_y),np.max(self.source.beta_y))
@@ -358,39 +354,50 @@ class GravitationalLens(object):
             
         else:
             
-            #  first create empty image with dimensions NX, NY
-            #  (we should make this more general later)  
-            self.image = np.empty([self.NX,self.NY],float)
-            
-            #  give each pixel in the image an x,y position to correspond to
-            #  (Again note:  the pixel grid we create now forces the image
-            #   to be perfectly alligned with the kappa map, which it need 
-            #   not be.  Make this more general later)
+            #  give each pixel in the image an x,y position 
             theta_x = np.arange(-self.NX/2,self.NX/2,1.0)*self.pixscale+self.pixscale
             theta_y = np.arange(-self.NY/2,self.NY/2,1.0)*self.pixscale+self.pixscale
-            self.theta_x,self.theta_y = np.meshgrid(theta_x,theta_y)              
+            self.theta_x,self.theta_y = np.meshgrid(theta_x,theta_y)
             
             #Find the corresponding angles in the source plane              
             self.beta_x = self.theta_x-self.alpha_x
-            self.beta_y = self.theta_y-self.alpha_y
+            self.beta_y = self.theta_y-self.alpha_y            
             
-            #create bilinear interpolation function (assumes uniform grid of x,y)
-            f_interpolation = interpolate.RectBivariateSpline(self.source.beta_y[:,0],self.source.beta_x[0,:],self.source.intensity,kx=1,ky=1)            
+            # if the source image is single wavelength, interpolate to find the 
+            # source image.
+            if len(self.source.intensity.shape) ==2:
+                
+                #  first create empty image with dimensions NX, NY
+                #  (we should make this more general later)  
+                self.image = np.empty([self.NX,self.NY],float)
             
-            #Find the intensity at each angle in the source plane, and record
-            #  it to self.image
+                #create bilinear interpolation function (assumes uniform grid of x,y)
+                f_interpolation = interpolate.RectBivariateSpline(self.source.beta_y[:,0],self.source.beta_x[0,:],self.source.intensity,kx=1,ky=1)            
             
-            #image = f_interpolation(self.beta_y.ravel(),self.beta_x.ravel())
-           # self.image = np.reshape(image,(self.NX,self.NY))
-            for i in range(self.NX):
-                for j in range(self.NY):
-                    #k = np.argmin((self.beta_x[i,j]-self.source.beta_x[0,:])**2)
-                    #l = np.argmin((self.beta_y[i,j]-self.source.beta_y[:,0])**2)
-                    #self.image[i,j] = self.source.intensity[l,k]
+                #interpolate for observed intensity at each angle            
+                for i in range(self.NX):
+                    for j in range(self.NY):
+                       #k = np.argmin((self.beta_x[i,j]-self.source.beta_x[0,:])**2)
+                       #l = np.argmin((self.beta_y[i,j]-self.source.beta_y[:,0])**2)
+                       #self.image[i,j] = self.source.intensity[l,k]
                     
-                    #use interpolation function to create observed image                 
-                    self.image[i,j] = f_interpolation(self.beta_y[i,j],self.beta_x[i,j])
-#                    
+                       self.image[i,j] = f_interpolation(self.beta_y[i,j],self.beta_x[i,j])
+                
+            else:   #if source image is a data cube, have to treat multiple colors
+                self.image = np.empty([self.source.Naxes,self.NX,self.NY], float)
+                
+                for i in range(self.source.Naxes):
+                    f_interpolation = interpolate.RectBivariateSpline(self.source.beta_y[:,0],self.source.beta_x[0,:],self.source.intensity[i,:,:],kx=1,ky=1)
+                
+                    for j in range(self.NX):
+                        for k in range(self.NY):
+                            self.image[i,j,k] = f_interpolation(self.beta_y[j,k],self.beta_x[j,k])
+                            #Warning, this methond is currenly built 
+                            #for rgb images.  Normally shouldn't have
+                            # int built in (since interpolations just estimate)
+                            # the flux in some band.
+                            
+              
         return
 
 # ---------------------------------------------------------------------

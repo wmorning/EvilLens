@@ -35,14 +35,21 @@ class Source(object):
         self.intensity = hdulist[0].data
         hdulist.close()
               
-        
-        assert len(self.intensity.shape) == 2
-        if self.intensity.shape == (self.hdr['NAXIS1'],self.hdr['NAXIS2']):
-            self.NX,self.NY = self.intensity.shape
-        elif self.intensity.shape ==(self.hdr['NAXIS2'],self.hdr['NAXIS1']):
-            self.NY,self.NX = self.intensity.shape
+        if self.hdr['NAXIS'] == 2:
+            if self.intensity.shape == (self.hdr['NAXIS1'],self.hdr['NAXIS2']):
+                self.NX,self.NY = self.intensity.shape
+            elif self.intensity.shape ==(self.hdr['NAXIS2'],self.hdr['NAXIS1']):
+                self.NY,self.NX = self.intensity.shape
+            else:
+                raise Exception("Your image is formatted incorrectly.\n")    
         else:
-            raise Exception("Your image is formatted incorrectly.\n")
+            assert len(self.intensity.shape) == 3
+            if self.intensity.shape == (self.hdr['NAXIS'],self.hdr['NAXIS1'],self.hdr['NAXIS2']):
+                self.Naxes,self.NX,self.NY = self.intensity.shape
+            elif self.intensity.shape ==(self.hdr['NAXIS'],self.hdr['NAXIS2'],self.hdr['NAXIS1']):
+                self.Naxes,self.NY,self.NX = self.intensity.shape
+            else:
+                raise Exception("Your image is formatted incorrectly.\n")
         self.set_pixscale()
         
         # Set up a new pixel grid to go with this new kappa map:
