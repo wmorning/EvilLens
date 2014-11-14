@@ -27,9 +27,11 @@ def JPG_to_FITS(jpgimage):
     npb = np.reshape(bdata, (ysize, xsize))
     
     datacube = np.empty([3,ysize,xsize])
-    datacube[0,...] = npr[::-1,...]
-    datacube[1,...] = npg[::-1,...]
+    datacube[0,...] = npr[::-1,...]  #invert images to be compatible with 
+    datacube[1,...] = npg[::-1,...]  #plotting options
     datacube[2,...] = npb[::-1,...]
+    
+    datacube /= 256.0 #we do this to get intensity from counts (maxcounts=256)
     
     magnitude_inverted = np.sqrt(npr**2+npg**2+npb**2)
     
