@@ -306,12 +306,37 @@ class GravitationalLens(object):
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec')            
         elif mapname == "lensed image":
-            plt.imshow(img,**options)
+            #plot same as everything else if achromatic
+            if len(img.shape)==2:
+                plt.imshow(img,**options)
+            elif (img.shape[0])==3:
+                options['vmin']=None
+                options['vmax']=None
+                img_new = np.empty([img.shape[1],img.shape[2],img.shape[0]],float)
+                for i in range(img.shape[0]):
+                    img_new[:,:,i] = img[i,:,:]
+                plt.imshow(img_new, **options)
+            else:
+                raise Exception("Cannot plot multiwavelength images yet.\n")
+
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec')            
         elif mapname == "non-lensed image":
             options['extent'] = (np.min(self.source.beta_x),np.max(self.source.beta_x),\
                                  np.min(self.source.beta_y),np.max(self.source.beta_y))
+            if len(img.shape)==2:
+                plt.imshow(img,**options)
+            elif (img.shape[0])==3:
+                options['vmin']=None
+                options['vmax']=None
+                img_new = np.empty([img.shape[1],img.shape[2],img.shape[0]],float)
+                for i in range(img.shape[0]):
+                    img_new[:,:,i] = img[i,:,:]
+                plt.imshow(img_new, **options)
+            else:
+                raise Exception("Cannot plot many (>3) wavelength images yet.\n")
+
+            
             plt.imshow(img, **options)
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec')
@@ -357,8 +382,6 @@ class GravitationalLens(object):
         3 dimensional (multicolor) images.  Interpolation is done
         for each color channel image separately and independently.
         '''       
-        
-        
         if self.source is None: 
             raise Exception("Can't do raytracing yet.\n")  
             
