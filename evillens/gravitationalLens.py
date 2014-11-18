@@ -369,6 +369,23 @@ class GravitationalLens(object):
         hdu.writeto(fitsfile)
        
         return
+
+# ----------------------------------------------------------------------
+
+    def write_image_to(self, fitsfile="lensed_image.fits"):
+        '''
+        Write a lensed image to a fits file to feed into an 
+        observing simulator.
+        '''        
+        if self.image == None:
+            raise Exception('No image to write to fitsfile yet.\n')
+        
+        hdu = fits.PrimaryHDU(self.image)
+        hdu.header['CDELT1'] = self.pixscale / 3600.0
+        hdu.header['CDELT2'] = self.pixscale / 3600.0
+        hdu.writeto(fitsfile)
+        
+        return
         
 # ----------------------------------------------------------------------
 
@@ -426,6 +443,12 @@ class GravitationalLens(object):
 # ---------------------------------------------------------------------
 
     def __add__(self,right):
+        '''
+        Add two gravitational lenses together to make a third lens.
+        In order to do this, both lenses must have kappa maps with
+        the same angular dimensions and pixel sizes.
+        '''        
+        
         #raise Exception("Cannot add lenses yet.\n")
         if issubclass(type(self),type(right)) is False and issubclass(type(right),type(self)) is False :
             raise TypeError('unsupported operand type(s)')
@@ -452,6 +475,12 @@ class GravitationalLens(object):
 # ----------------------------------------------------------------------
         
     def __sub__(self,right):
+        '''
+        Subtract one lens from another to make a third lens.  This
+        is mostly useful for computing errors on deflection angles,
+        but functionalities could be increased to include 
+        differences in kappa or lensed images.
+        '''
         #raise Exception("Cannot subtract lenses yet.\n")
         if issubclass(type(self),type(right)) is False:
             raise TypeError('unsupported operand type(s)')
