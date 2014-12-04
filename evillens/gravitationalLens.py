@@ -206,23 +206,23 @@ class GravitationalLens(object):
             levels = np.arange(-0.5,0.5,0.1)
             options = dict(interpolation='nearest',\
                            origin='lower',\
-                           vmin=-0.5, \
-                           vmax=0.5)
+                           vmin=-1.0, \
+                           vmax=1.0)
         elif mapname == "alpha_x":
             img = self.alpha_x
             levels = np.arange(-0.5,0.5,0.1)
             options = dict(interpolation='nearest',\
                            origin='lower',\
-                           vmin=-0.5, \
-                           vmax=0.5)                           
+                           vmin=-1.0, \
+                           vmax=1.0)                           
         
         elif mapname == "alpha_y":
             img = self.alpha_y
             levels = np.arange(-0.5,0.5,0.1)
             options = dict(interpolation='nearest',\
                            origin='lower',\
-                           vmin=-0.5, \
-                           vmax=0.5)
+                           vmin=-1.0, \
+                           vmax=1.0)
                            
         elif mapname == "lensed image":
             img = self.image
@@ -235,8 +235,8 @@ class GravitationalLens(object):
             else:
                 options = dict(interpolation='nearest',\
                                origin='lower',\
-                               vmin=-0.2, \
-                               vmax=np.average(self.image)*5.0)
+                               vmin=0.2, \
+                               vmax=np.max(self.image)*0.98)
                                
         elif mapname == "non-lensed image":
             img = self.source.intensity
@@ -249,8 +249,8 @@ class GravitationalLens(object):
             else:
                 options = dict(interpolation='nearest',\
                                origin='lower',\
-                               vmin=-0.2, \
-                               vmax=np.average(self.image)*5.0)
+                               vmin=0.2, \
+                               vmax=np.max(self.image)*0.98)
         else:
              raise ValueError("unrecognized map name %s" % mapname)
         
@@ -284,31 +284,37 @@ class GravitationalLens(object):
         # Plot a colored pixel map.  Options determined for each type of map
         if mapname == "kappa":
             plt.imshow(img, **options)
+            plt.colorbar(shrink = 0.75)
             plt.contour(self.x, self.y, img, levels,colors=('k',))
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec')
         elif mapname =="alpha":
             plt.subplot(121)
             plt.imshow(img1,**options)
+            plt.colorbar(shrink = 0.75)
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec')
             plt.subplot(121).set_aspect('equal')
             plt.subplot(122)
             plt.xlabel('x / arcsec')
             plt.subplot(122).set_aspect('equal')
-            plt.imshow(img2, **options)             
+            plt.imshow(img2, **options)
+            plt.colorbar(shrink = 0.75)            
         elif mapname == "alpha_x":
             plt.imshow(img, **options)
+            plt.colorbar(shrink = 0.75)
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec')
         elif mapname == "alpha_y":
             plt.imshow(img, **options)
+            plt.colorbar(shrink = 0.75)
             plt.xlabel('x / arcsec')
-            plt.ylabel('y / arcsec')            
+            plt.ylabel('y / arcsec') 
         elif mapname == "lensed image":
             #plot same as everything else if achromatic
             if len(img.shape)==2:
                 plt.imshow(img,**options)
+                plt.colorbar(shrink = 0.75)
             elif (img.shape[0])==3:
                 options['vmin']=None
                 options['vmax']=None
@@ -326,6 +332,7 @@ class GravitationalLens(object):
                                  np.min(self.source.beta_y),np.max(self.source.beta_y))
             if len(img.shape)==2:
                 plt.imshow(img,**options)
+                plt.colorbar(shrink = 0.75)
             elif (img.shape[0])==3:
                 options['vmin']=None
                 options['vmax']=None
@@ -337,9 +344,9 @@ class GravitationalLens(object):
                 raise Exception("Cannot plot many (>3) wavelength images yet.\n")
 
             
-            plt.imshow(img, **options)
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec')
+            
         else:
             pass
         
@@ -482,7 +489,7 @@ class GravitationalLens(object):
         differences in kappa or lensed images.
         '''
         #raise Exception("Cannot subtract lenses yet.\n")
-        if issubclass(type(self),type(right)) is False:
+        if issubclass(type(self),type(right)) is False and issubclass(type(right),type(self)) is False:
             raise TypeError('unsupported operand type(s)')
         assert len(self.kappa.shape) == len(right.kappa.shape)
         assert self.kappa.shape == right.kappa.shape
