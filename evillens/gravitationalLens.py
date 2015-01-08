@@ -235,8 +235,8 @@ class GravitationalLens(object):
             else:
                 options = dict(interpolation='nearest',\
                                origin='lower',\
-                               vmin=0.2, \
-                               vmax=np.max(self.image)*0.98)
+                               vmin=-0.2, \
+                               vmax=np.max(self.image)*0.95)
                                
         elif mapname == "non-lensed image":
             img = self.source.intensity
@@ -249,8 +249,8 @@ class GravitationalLens(object):
             else:
                 options = dict(interpolation='nearest',\
                                origin='lower',\
-                               vmin=0.2, \
-                               vmax=np.max(self.image)*0.98)
+                               vmin=-0.2, \
+                               vmax=np.max(self.image)*0.95)
         else:
              raise ValueError("unrecognized map name %s" % mapname)
         
@@ -284,14 +284,16 @@ class GravitationalLens(object):
         # Plot a colored pixel map.  Options determined for each type of map
         if mapname == "kappa":
             plt.imshow(img, **options)
-            plt.colorbar(shrink = 0.75)
+            cbar = plt.colorbar(shrink = 0.75)
+            cbar.set_label('$ \kappa $ / dimensionless',fontsize=12)
             plt.contour(self.x, self.y, img, levels,colors=('k',))
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec')
         elif mapname =="alpha":
             plt.subplot(121)
             plt.imshow(img1,**options)
-            plt.colorbar(shrink = 0.75)
+            cbar = plt.colorbar(shrink = 0.75)
+            cbar.set_label(r'$ \alpha_{x} $ / arcsec',fontsize=12)
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec')
             plt.subplot(121).set_aspect('equal')
@@ -299,22 +301,27 @@ class GravitationalLens(object):
             plt.xlabel('x / arcsec')
             plt.subplot(122).set_aspect('equal')
             plt.imshow(img2, **options)
-            plt.colorbar(shrink = 0.75)            
+            cbar2 = plt.colorbar(shrink = 0.75)    
+            cbar2.set_label(r'$ \alpha_{y} $ / arcsec',fontsize=12)
+            fig.tight_layout()
         elif mapname == "alpha_x":
             plt.imshow(img, **options)
-            plt.colorbar(shrink = 0.75)
+            cbar = plt.colorbar(shrink = 0.75)
+            cbar.set_label(r'$\alpha_{x} $ / arcsec',fontsize=12)
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec')
         elif mapname == "alpha_y":
             plt.imshow(img, **options)
-            plt.colorbar(shrink = 0.75)
+            cbar = plt.colorbar(shrink = 0.75)
+            cbar.set_label(r'$\alpha_{y} $ / arcsec',fontsize=12)
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec') 
         elif mapname == "lensed image":
             #plot same as everything else if achromatic
             if len(img.shape)==2:
                 plt.imshow(img,**options)
-                plt.colorbar(shrink = 0.75)
+                cbar = plt.colorbar(shrink = 0.75)
+                cbar.set_label('Flux / mJy',fontsize=12)
             elif (img.shape[0])==3:
                 options['vmin']=None
                 options['vmax']=None
@@ -332,7 +339,8 @@ class GravitationalLens(object):
                                  np.min(self.source.beta_y),np.max(self.source.beta_y))
             if len(img.shape)==2:
                 plt.imshow(img,**options)
-                plt.colorbar(shrink = 0.75)
+                cbar = plt.colorbar(shrink = 0.75)
+                cbar.set_label('Flux / mJy', fontsize=12)
             elif (img.shape[0])==3:
                 options['vmin']=None
                 options['vmax']=None
