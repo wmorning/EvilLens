@@ -50,7 +50,7 @@ class AnalyticSIELens(evil.GravitationalLens):
         self.b = b.decompose()*(3600.0*180.0/np.pi)
          
          # Now compute kappa using lens equation from Saas Fe.
-        self.kappa = self.b.value /(2.0*np.sqrt(self.q*((self.x-self.centroid[0])**2+self.r_c**2)+(self.y-self.centroid[1])**2))
+        self.kappa = self.b.value /(2.0*np.sqrt(self.q**2*((self.x-self.centroid[0])**2+self.r_c**2)+(self.y-self.centroid[1])**2))
 
         return
          
@@ -66,8 +66,8 @@ class AnalyticSIELens(evil.GravitationalLens):
         #self.alpha_y = (self.b.value/np.sqrt(1-self.q**2))*np.arctanh(np.sqrt((1-self.q**2)/(self.q**2*np.cos(image_theta)**2+np.sin(image_theta)**2))*np.sin(image_theta))
         
         # Deflect analytically using equation from Saas Fe
-        self.alpha_x = (self.b.value/np.sqrt(1-self.q**2)) * np.arctan((self.image_x-self.centroid[0])*np.sqrt(1-self.q**2)/(np.sqrt(self.q**2*(self.image_x-self.centroid[0])**2+(self.image_y-self.centroid[1])**2)+self.r_c))        
-        self.alpha_y = (self.b.value/np.sqrt(1-self.q**2)) * np.arctanh((self.image_y-self.centroid[1])*np.sqrt(1-self.q**2)/(np.sqrt(self.q**2*(self.image_x-self.centroid[0])**2+(self.image_y-self.centroid[1])**2)+self.r_c))
+        self.alpha_x = (self.b.value/np.sqrt(1-self.q**2)) * np.arctan((self.image_x-self.centroid[0])*np.sqrt(1-self.q**2)/(np.sqrt(self.q**2*((self.image_x-self.centroid[0])**2+self.r_c**2)+(self.image_y-self.centroid[1])**2)+self.r_c))        
+        self.alpha_y = (self.b.value/np.sqrt(1-self.q**2)) * np.arctanh((self.image_y-self.centroid[1])*np.sqrt(1-self.q**2)/(np.sqrt(self.q**2*((self.image_x-self.centroid[0])**2+self.r_c**2)+(self.image_y-self.centroid[1])**2)+self.q**2*self.r_c))
         return
 
 # ======================================================================
