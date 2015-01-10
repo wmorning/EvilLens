@@ -125,6 +125,7 @@ class GravitationalLens(object):
         self.NX,self.NY = self.kappa.shape
         self.set_pixscale()
         
+
         # Set up a new pixel grid to go with this new kappa map:
         self.setup_grid()
         
@@ -228,13 +229,11 @@ class GravitationalLens(object):
             img = self.image
             #This statement sets contrast based on the type of image.
             if (np.max(self.image)-np.average(self.image))/np.average(self.image) < 1:
-                options = dict(interpolation='nearest',\
-                               origin='lower',\
+                options = dict(origin='lower',\
                                vmin=np.min(self.image)*0.95, \
                                vmax=np.max(self.image)*0.95)
             else:
-                options = dict(interpolation='nearest',\
-                               origin='lower',\
+                options = dict(origin='lower',\
                                vmin=-0.2, \
                                vmax=np.max(self.image)*0.95)
                                
@@ -381,7 +380,8 @@ class GravitationalLens(object):
         hdu.header['CDELT1'] = self.pixscale / 3600.0
         hdu.header['CDELT2'] = self.pixscale / 3600.0
         
-        hdu.writeto(fitsfile)
+        
+        hdu.writeto(fitsfile,clobber=True)
        
         return
 
@@ -420,8 +420,8 @@ class GravitationalLens(object):
         else:
             
             #  give each pixel in the image an x,y position 
-            theta_x = np.arange(-self.NX/2,self.NX/2,1.0)*self.pixscale+self.pixscale
-            theta_y = np.arange(-self.NY/2,self.NY/2,1.0)*self.pixscale+self.pixscale
+            theta_x = np.arange(-self.NX/2.0,self.NX/2.0,1.0)*self.pixscale+self.pixscale
+            theta_y = np.arange(-self.NY/2.0,self.NY/2.0,1.0)*self.pixscale+self.pixscale
             self.theta_x,self.theta_y = np.meshgrid(theta_x,theta_y)
             
             #Find the corresponding angles in the source plane              
