@@ -16,6 +16,7 @@ from scipy import interpolate
 from scipy.integrate import simps
 
 
+
 # ======================================================================
 
 class GravitationalLens(object):
@@ -86,8 +87,8 @@ class GravitationalLens(object):
         #WRM:  here we build new grid for the image and source pixels,
         #      purposefully misaligned with the kappa pixels, so no NaNs occur.        
         self.pixel_offset = self.offset*self.pixscale/self.n
-        image_xgrid = np.arange(-self.NX/2.0,(self.NX)/2.0,1.0/self.n)*self.pixscale+self.pixscale-self.pixel_offset
-        image_ygrid = np.arange(-self.NY/2.0,(self.NY)/2.0,1.0/self.n)*self.pixscale+self.pixscale-self.pixel_offset
+        image_xgrid = np.arange(-self.NX*self.n/2.0,self.NX*self.n/2.0,1.0)*self.pixscale+self.pixscale-self.pixel_offset
+        image_ygrid = np.arange(-self.NY*self.n/2.0,self.NY*self.n/2.0,1.0)*self.pixscale+self.pixscale-self.pixel_offset
         self.image_x, self.image_y = np.meshgrid(image_xgrid,image_ygrid)
         self.NX_image,self.NY_image = self.image_x.shape        
         
@@ -243,13 +244,13 @@ class GravitationalLens(object):
             if (np.max(self.image)-np.average(self.image))/np.average(self.image) < 1:
                 options = dict(interpolation='nearest',\
                                origin='lower',\
-                               vmin=np.min(self.image)*0.95, \
-                               vmax=np.max(self.image)*0.95)
+                               vmin=np.min(self.source.intensity)*0.95, \
+                               vmax=np.max(self.source.intensity)*0.95)
             else:
                 options = dict(interpolation='nearest',\
                                origin='lower',\
                                vmin=-0.2, \
-                               vmax=np.max(self.image)*0.95)
+                               vmax=np.max(self.source.intensity)*0.95)
         else:
              raise ValueError("unrecognized map name %s" % mapname)
         
@@ -419,9 +420,9 @@ class GravitationalLens(object):
             
         else:
             
-            #  give each pixel in the image an x,y position 
-            theta_x = np.arange(-self.NX/2.0,self.NX/2.0,1.0)*self.pixscale+self.pixscale
-            theta_y = np.arange(-self.NY/2.0,self.NY/2.0,1.0)*self.pixscale+self.pixscale
+            #  give each pixel in the image an x,y position, should be same as image_x, image_y
+            theta_x = np.arange(-self.NX/2.0,self.NX/2.0,1.0)*self.pixscale+self.pixscale+self.pixel_offset
+            theta_y = np.arange(-self.NY/2.0,self.NY/2.0,1.0)*self.pixscale+self.pixscale+self.pixel_offset
             self.theta_x,self.theta_y = np.meshgrid(theta_x,theta_y)
             
             #Find the corresponding angles in the source plane              
@@ -439,8 +440,8 @@ class GravitationalLens(object):
                 f_interpolation = interpolate.RectBivariateSpline(self.source.beta_y[:,0],self.source.beta_x[0,:],self.source.intensity,kx=1,ky=1)            
             
                 #interpolate for observed intensity at each angle            
-                for i in range(self.NX):
-                    for j in range(self.NY):                    
+                for i in range(len(self.image[:,0])):
+                    for j in range(len(self.image[0,:])):                    
                        self.image[i,j] = f_interpolation(self.beta_y[i,j],self.beta_x[i,j])
                 
             else:   #multiwavelength data cube
