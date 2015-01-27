@@ -73,7 +73,7 @@ class GravitationalLens(object):
         if pixscale is not None: 
             self.pixscale = pixscale
         if n is not None:
-            self.n = n
+            self.n = int(n)
         if offset is not None:
             self.offset = offset
         
@@ -86,9 +86,9 @@ class GravitationalLens(object):
         
         #WRM:  here we build new grid for the image and source pixels,
         #      purposefully misaligned with the kappa pixels, so no NaNs occur.        
-        self.pixel_offset = self.offset*self.pixscale/self.n
-        image_xgrid = np.arange(-self.NX*self.n/2.0,self.NX*self.n/2.0,1.0)*self.pixscale+self.pixscale-self.pixel_offset
-        image_ygrid = np.arange(-self.NY*self.n/2.0,self.NY*self.n/2.0,1.0)*self.pixscale+self.pixscale-self.pixel_offset
+        self.pixel_offset = self.offset*self.pixscale
+        image_xgrid = np.arange(-(self.NX//self.n)/2.0,(self.NX//self.n)/2.0,1.0)*self.pixscale+self.pixscale-self.pixel_offset
+        image_ygrid = np.arange(-(self.NY//self.n)/2.0,(self.NY/self.n)/2.0,1.0)*self.pixscale+self.pixscale-self.pixel_offset
         self.image_x, self.image_y = np.meshgrid(image_xgrid,image_ygrid)
         self.NX_image,self.NY_image = self.image_x.shape        
         
@@ -126,8 +126,11 @@ class GravitationalLens(object):
         self.NX,self.NY = self.kappa.shape
         self.set_pixscale()
         
-
+        
         # Set up a new pixel grid to go with this new kappa map:
+        # Include padding if it was given in the fits header
+        
+        self.n = self.hdr['NPADDING']
         self.setup_grid()
         
         return
@@ -200,7 +203,9 @@ class GravitationalLens(object):
             options = dict(interpolation='nearest',\
                            origin='lower',\
                            vmin=-0.2, \
-                           vmax=1.5)       
+                           vmax=1.5)
+            options['extent'] = (np.min(self.x),np.max(self.x),\
+                                 np.min(self.y),np.max(self.y))
                            
         elif mapname == "alpha":
             img1 = self.alpha_x
@@ -210,6 +215,8 @@ class GravitationalLens(object):
                            origin='lower',\
                            vmin=-1.0, \
                            vmax=1.0)
+            options['extent'] = (np.min(self.image_x),np.max(self.image_x),\
+                                 np.min(self.image_y),np.max(self.image_y))
         elif mapname == "alpha_x":
             img = self.alpha_x
             levels = np.arange(-0.5,0.5,0.1)
@@ -217,7 +224,9 @@ class GravitationalLens(object):
                            origin='lower',\
                            vmin=-1.0, \
                            vmax=1.0)                           
-        
+            options['extent'] = (np.min(self.image_x),np.max(self.image_x),\
+                                 np.min(self.image_y),np.max(self.image_y))
+            
         elif mapname == "alpha_y":
             img = self.alpha_y
             levels = np.arange(-0.5,0.5,0.1)
@@ -225,6 +234,8 @@ class GravitationalLens(object):
                            origin='lower',\
                            vmin=-1.0, \
                            vmax=1.0)
+            options['extent'] = (np.min(self.image_x),np.max(self.image_x),\
+                                 np.min(self.image_y),np.max(self.image_y))
                            
         elif mapname == "lensed image":
             img = self.image
@@ -237,7 +248,9 @@ class GravitationalLens(object):
                 options = dict(origin='lower',\
                                vmin=-0.2, \
                                vmax=np.max(self.image)*0.95)
-                               
+            options['extent'] = (np.min(self.image_x),np.max(self.image_x),\
+                                 np.min(self.image_y),np.max(self.image_y))                               
+                        
         elif mapname == "non-lensed image":
             img = self.source.intensity
             #same as for lensed image, here we guess for the contrast.
@@ -251,6 +264,8 @@ class GravitationalLens(object):
                                origin='lower',\
                                vmin=-0.2, \
                                vmax=np.max(self.source.intensity)*0.95)
+            options['extent'] = (np.min(self.source.beta_x),np.max(self.source.beta_x),\
+                                 np.min(self.source.beta_y),np.max(self.source.beta_y))
         else:
              raise ValueError("unrecognized map name %s" % mapname)
         
@@ -271,8 +286,7 @@ class GravitationalLens(object):
         
         # Finish setting up the options.
         # 1) Images need extents, if x and y are not pixel numbers:
-        options['extent'] = (np.min(self.x),np.max(self.x),\
-                                 np.min(self.y),np.max(self.y))
+        
         # 2) The cubehelix map is linear grayscale on a BW printer
         options['cmap'] = plt.get_cmap('cubehelix')
         
@@ -335,8 +349,7 @@ class GravitationalLens(object):
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec')            
         elif mapname == "non-lensed image":
-            options['extent'] = (np.min(self.source.beta_x),np.max(self.source.beta_x),\
-                                 np.min(self.source.beta_y),np.max(self.source.beta_y))
+            
             if len(img.shape)==2:
                 plt.imshow(img,**options)
                 cbar = plt.colorbar(shrink = 0.75)
@@ -380,6 +393,7 @@ class GravitationalLens(object):
         
         hdu.header['CDELT1'] = self.pixscale / 3600.0
         hdu.header['CDELT2'] = self.pixscale / 3600.0
+        hdu.header['NPADDING'] = self.n
         
         
         hdu.writeto(fitsfile,clobber=True)
@@ -421,8 +435,8 @@ class GravitationalLens(object):
         else:
             
             #  give each pixel in the image an x,y position, should be same as image_x, image_y
-            theta_x = np.arange(-self.NX/2.0,self.NX/2.0,1.0)*self.pixscale+self.pixscale+self.pixel_offset
-            theta_y = np.arange(-self.NY/2.0,self.NY/2.0,1.0)*self.pixscale+self.pixscale+self.pixel_offset
+            theta_x = np.arange(-(self.NX//self.n)/2.0,(self.NX//self.n)/2.0,1.0)*self.pixscale+self.pixscale+self.pixel_offset
+            theta_y = np.arange(-(self.NY//self.n)/2.0,(self.NY//self.n)/2.0,1.0)*self.pixscale+self.pixscale+self.pixel_offset
             self.theta_x,self.theta_y = np.meshgrid(theta_x,theta_y)
             
             #Find the corresponding angles in the source plane              
@@ -434,7 +448,7 @@ class GravitationalLens(object):
                 
                 #  first create empty image with dimensions NX, NY
                 #  (we should make this more general later)  
-                self.image = np.empty([self.NX,self.NY],float)
+                self.image = np.empty([self.NX//self.n,self.NY//self.n],float)
             
                 #create bilinear interpolation function (assumes uniform grid of x,y)
                 f_interpolation = interpolate.RectBivariateSpline(self.source.beta_y[:,0],self.source.beta_x[0,:],self.source.intensity,kx=1,ky=1)            
@@ -445,13 +459,13 @@ class GravitationalLens(object):
                        self.image[i,j] = f_interpolation(self.beta_y[i,j],self.beta_x[i,j])
                 
             else:   #multiwavelength data cube
-                self.image = np.empty([self.source.Naxes,self.NX,self.NY], float)
+                self.image = np.empty([self.source.Naxes,self.NX//self.n,self.NY//self.n], float)
                 
                 for i in range(self.source.Naxes):
                     f_interpolation = interpolate.RectBivariateSpline(self.source.beta_y[:,0],self.source.beta_x[0,:],self.source.intensity[i,:,:],kx=1,ky=1)
                 
-                    for j in range(self.NX):
-                        for k in range(self.NY):
+                    for j in range(self.NX//self.n):
+                        for k in range(self.NY//self.n):
                             self.image[i,j,k] = f_interpolation(self.beta_y[j,k],self.beta_x[j,k])
                             
         return
@@ -471,10 +485,12 @@ class GravitationalLens(object):
         assert len(self.kappa.shape) == len(right.kappa.shape)
         assert self.kappa.shape == right.kappa.shape
         assert abs(self.pixscale - right.pixscale) <10**-10
+        assert self.n == right.n
         
         newLens = GravitationalLens(self.Zd,self.Zs)
         newLens.NX,newLens.NY = self.kappa.shape
         newLens.pixscale = self.pixscale
+        newLens.n = self.n
         
         # Set up a new pixel grid to go with this new kappa map:
         newLens.setup_grid()        
@@ -503,10 +519,12 @@ class GravitationalLens(object):
         assert len(self.kappa.shape) == len(right.kappa.shape)
         assert self.kappa.shape == right.kappa.shape
         assert abs(self.pixscale - right.pixscale) <10**-10
+        assert self.n == right.n
         
         newLens = GravitationalLens(self.Zd,self.Zs)
         newLens.NX,newLens.NY = self.kappa.shape
         newLens.pixscale = self.pixscale
+        newLens.n = self.n        
         
         # Set up a new pixel grid to go with this new kappa map:
         newLens.setup_grid()        
