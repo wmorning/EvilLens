@@ -25,4 +25,47 @@ Given a specific lensing geometry, and a specific mass profile, a map of
 \kappa can be produced over the lensing plane, and integrating over that map
 produces a map of the observing pixels in the source frame.
 
+Of course, integrating over this map using a finite numerical resolution 
+leads to numerical errors due to the finite pixel size.  Additionally, if
+integrating a mass distribution that spans all of space, integrating over a finite 
+grid will systematically underrepresent the mass located exterior to the grid.
+To deal with these two problems, we have incorporated padding into our code, meaning 
+that we use a larger grid of points to represent our mass map, and integrate for 
+the deflection angles in only a small portion of the map.  This yields a significant
+improvement in the accuracy of our estimated deflection angles, without oversampling 
+image regions significantly outside of the critical radius (in which multiple images
+would not be produced anyways).  Even this becomes computationally intensive however,
+as one ideally needs to achieve a pixel resolution on the order of milliarcseconds as 
+well as span a mass map that covers nearly twenty arcseconds on an axis (to supress
+any biases in the calculated deflection angles).  Thus it is most productive to find 
+a balance between time and accuracy.  We have thus tabulated a grid of pixel sizes, 
+padding factor (n), number of mass pixels, run time ($t_{run}$), and percent rms error (\epsilon) in the 
+measured mass of a subhalo.
+
+\begin{table}[tb]
+\caption{Accuracy vs. Time Testing Results}
+\label{tab:Acc}
+\begin{center}
+\begin{tabular}{lllll}
+\tableline \tableline
+\# of $\kappa$ Pixels & Pixel Size & n & $t_{run}$ & $\epsilon$ \\
+ ~ & $(arcsec)$ & ~ & seconds & $(\%)$ \\
+ 100 & 0.02 & 1\\
+ 200 & 0.02 & 2\\
+ 400 & 0.02 & 4 & 191 & 5\\
+ 400 & 0.02 & 2\\
+ 800 & 0.02 & 8\\
+ 800 & 0.02 & 4\\
+ 800 & 0.02 & 2\\
+ 1600 & 0.02 & 16\\
+ 1600 & 0.02 & 8\\
+
+\tableline{}
+\end{tabular}
+\end{center}
+\tablecomments{Accuracy and Run-time in calculating the deflection angles using EvilLens.  In all 
+cases, we used a $\kappa$ map consisting of two SIE lenses; a main halo with velocity dispersion
+$\sigma_{v}=200~km~s^{-1}$ and axis ratio $q=0.75$, and a subhalo with $\sigma_{v}=40.0~km~s^{-1}$ 
+and axis ratio q=0.99 .  Our proxy for accuracy is the error in the measured subhalo mass.}
+
 \end{document}
