@@ -1,34 +1,56 @@
 \begin{document}
-In order to properly produce a lensed image (given a source image, and a 
-lensing mass distribution), one needs to trace the light rays backwards 
-from the observed image to the source.  When a light ray is deflected by an 
-object, the change in angle by which it is deflected \alpha can be inferred
-using a projection of the lensing mass density onto a 2-dimensional plane.
-Mathematically, this is: 
 
-\begin{equation} \alpha = \int\int \kappa(x,y) \frac{}{}
-\end{equation}
-Where \alpha is the deflection angle, and \kappa(x,y) is the dimensionless
-surface density
+In order to correctly model a gravitational lensing system, one 
+needs to know the path that light rays take through a space to reach an observer.
+Because only a small portion of the emitted rays ever reach an observer,
+a significant amount of time is saved when modeling a lens by tracing
+light rays {\i backwards} rather than forwards.  To make an image this
+way, all one needs to do is form an image (which we take to be a
+grid of pixels with uniform spacing), and trace the path of light rays
+from an image pixel back to their origin.  In a gravitational lens system
+many rays are deflected by some amount, and thus most originate
+from a different angular position than their apparent position in the image 
+plane.  Typically, the apparent position on the image plane is referred to 
+as $\vec{\theta}$, while the true position in the source plane is referred to
+as $\vec{\beta}$.  In this work, we will often refer to these positions with 
+their "x" and "y" components for convenience, but it is important to note
+that this x and y only refer to two orthogonal dimensions on the image or source 
+plane (rather than preferred directions).  The relation between the positions 
+$\vec{\theta}$ and $\vec{\beta}}$ are related by the deflection angle, which 
+is traditionally denoted as $\vec{\alpha}$, by the following relation:
+\begin{equation}  \vec{\beta} = \vec{\theta}-\vec{\alpha}   \end{equation}
+Which is referred to as the "lens equation."
 
-\begin{equation} \kappa(x,y) = \frac{\Sigma(x,y)}{\Sigma_{c}}
+If $\vec{\alpha}$ is known, then each point in an image is traced backwards
+to a corresponding point in the source plane.  However, the major complication is that
+$\vec{\alpha}$ is almost never known {\i a priori}.  Instead, we model the 
+mass distribution of a lens and predict the 
+deflection angles using the equations for bending of light that fall out of 
+general relativity.  The process by which this is done is as follows:
 
-\end{equation}
+\begin{enumerate}
+\item Compared to the distances between objects, their thicknesses is very small.  We thus 
+approximate them as infinitesimally thin sheets with a surface density $\Sigma$, which is found by 
+integrating the three dimensional density along the observing axis.
+\item The surface density can be made dimensionless by dividing by the critical density $\Sigma_{c}$,
+this quantity is called the convergence and is denoted using the letter $\kappa$.
+\item For a given point in an image, weight the convergence by its distance from 
+that point.  Perform the double integral of this weighted function.  The resulting 
+value is the deflection angle $\vec{\alpha}$ at that point.
+\item Repeat These steps for each point in your image to get a full map of the 
+deflection angles. 
+\end{enumerate}
 
-Here, $\Sigma_{c}$ is the critical surface density, which is dependent on the
-lens geometry.
-
-\begin{equation} \Sigma_{c} = \frac{c^2}{4\pi G}\frac{D_{s}}{D_{d}D_{ds}}
-\end{equation}
-
-Given a specific lensing geometry, and a specific mass profile, a map of 
-\kappa can be produced over the lensing plane, and integrating over that map
-produces a map of the observing pixels in the source frame.
-
+Typically, this process is done for idealized density profiles, which have analytic
+solutions.  However, our implementation is instead to perform this process
+numerically, thus freeing us from the assumption of idealized lensing mass 
+distributions.  To do this, we create a numerical grid of the convergence, and
+numerically integrate the weighted grid using simpsons rule in two dimensions.
 Of course, integrating over this map using a finite numerical resolution 
 leads to numerical errors due to the finite pixel size.  Additionally, if
 integrating a mass distribution that spans all of space, integrating over a finite 
-grid will systematically underrepresent the mass located exterior to the grid.
+grid will systematically underrepresent the mass located exterior to the grid, and 
+thus will systematically overestimate the magnitude deflection angles.
 To deal with these two problems, we have incorporated padding into our code, meaning 
 that we use a larger grid of points to represent our mass map, and integrate for 
 the deflection angles in only a small portion of the map.  This yields a significant
