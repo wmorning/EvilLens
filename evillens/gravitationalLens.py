@@ -14,6 +14,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import interpolate
 from scipy.integrate import simps
+from time import time
 
 
 
@@ -79,9 +80,9 @@ class GravitationalLens(object):
         
         
         #build grid for kappa map
-        xgrid = np.arange(-self.NX/2.0,(self.NX)/2.0,1.0)*self.pixscale+self.pixscale
-        ygrid = np.arange(-self.NY/2.0,(self.NY)/2.0,1.0)*self.pixscale+self.pixscale
-        self.x, self.y = np.meshgrid(xgrid,ygrid)        
+        self.xgrid = np.arange(-self.NX/2.0,(self.NX)/2.0,1.0)*self.pixscale+self.pixscale
+        self.ygrid = np.arange(-self.NY/2.0,(self.NY)/2.0,1.0)*self.pixscale+self.pixscale
+        self.x, self.y = np.meshgrid(self.xgrid,self.ygrid)        
         
         
         #WRM:  here we build new grid for the image and source pixels,
@@ -157,7 +158,7 @@ class GravitationalLens(object):
 
 # ----------------------------------------------------------------------
     
-    def deflect(self):
+    def deflect(self, method='simps'):
         
         if self.kappa is None:
             self.alpha_x = None
@@ -167,23 +168,41 @@ class GravitationalLens(object):
             #create empty arrays to be filled with x,y components of alpha
             alpha_x = np.empty([self.NX_image,self.NY_image], float)
             alpha_y = np.empty([self.NX_image,self.NY_image], float)
-            
+            start = time()
+            if method == 'simps':            
             #double for loop to get each point in array
-            for i in range(len(alpha_x[:,0])):
-                for j in range(len(alpha_x[0,:])):
-                    
-                    # calculate deflection angles using simpsons rule.  Uses
-                    # pixscale as dx.  (more generally, can be made to use x,y 
-                    # coordinate arrays to determine dx, dy but this is 2x slower)
-                    alpha_x[i,j] = simps(simps(1/np.pi *self.kappa * (self.image_x[i,j]-self.x)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2),dx = self.pixscale),dx = self.pixscale)
-                    alpha_y[i,j] = simps(simps(1/np.pi *self.kappa * (self.image_y[i,j]-self.y)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2),dx = self.pixscale),dx = self.pixscale)
+            
+                for i in range(len(alpha_x[:,0])):
+                    for j in range(len(alpha_x[0,:])):
+#                    '''calculate deflection angles using simpsons rule.  Uses 
+#                    xgrid, ygrid to determine dx and dy.  Very accurate, but
+#                    can take > 0.1 s per integral for large grids.
+#                    '''                    
+                        alpha_x[i,j] = simps(simps(1/np.pi *self.kappa  \
+                        * (self.image_x[i,j]-self.x)/((self.image_x[i,j]\
+                        -self.x)**2+(self.image_y[i,j]-self.y)**2),x =  \
+                        self.xgrid),x=self.ygrid)
+                        
+                        alpha_y[i,j] = simps(simps(1/np.pi *self.kappa * \
+                        (self.image_y[i,j]-self.y)/((self.image_x[i,j]-\
+                        self.x)**2+(self.image_y[i,j]-self.y)**2),x = \
+                        self.xgrid),x=self.ygrid)
                      
-                    # old way (crude rectangle rule. Much quicker than simpson's
-                    # rule for some reason.  Keep for now.) 
-                    #alpha_x[i,j] =1/np.pi * np.nansum(self.kappa * (self.image_x[i,j]-self.x)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
-                    #alpha_y[i,j] =1/ np.pi * np.nansum(self.kappa * (self.image_y[i,j]-self.y)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
+            elif method == 'rectangles':
+#                '''Compute integrals by approximating pixels as point masses
+#                with position equivalent to their x,y coordinates.  In 
+#                principle this is less accurate than simpson's rule, but
+#                it is significantly faster.
+#                '''
+                for i in range(len(alpha_x[:,0])):
+                    for j in range(len(alpha_x[0,:])):
+                    
+                        alpha_x[i,j] =1/np.pi * np.sum(self.kappa * (self.image_x[i,j]-self.x)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
+                        alpha_y[i,j] =1/ np.pi * np.sum(self.kappa * (self.image_y[i,j]-self.y)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
             self.alpha_x = alpha_x
             self.alpha_y = alpha_y
+            stop = time()
+            print('Elapsed seconds during calculation:',stop-start)
         else:
             raise Exception("Can't do integral.  your kappa map must be 2-D .\n")  
         
