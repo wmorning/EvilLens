@@ -130,8 +130,11 @@ class GravitationalLens(object):
         
         # Set up a new pixel grid to go with this new kappa map:
         # Include padding if it was given in the fits header
-        
-        self.n = self.hdr['NPADDING']
+        if 'NPADDING' in self.hdr.keys():
+            self.n = self.hdr['NPADDING']
+        else:
+            self.n = 1
+            
         self.setup_grid()
         
         return
@@ -158,7 +161,7 @@ class GravitationalLens(object):
 
 # ----------------------------------------------------------------------
     
-    def deflect(self, method='simps'):
+    def deflect(self, method='simpsons', vectorized = False):
         
         if self.kappa is None:
             self.alpha_x = None
@@ -169,9 +172,9 @@ class GravitationalLens(object):
             alpha_x = np.empty([self.NX_image,self.NY_image], float)
             alpha_y = np.empty([self.NX_image,self.NY_image], float)
             start = time()
-            if method == 'simps':            
+            if method == 'simpsons':            
             #double for loop to get each point in array
-            
+                
                 for i in range(len(alpha_x[:,0])):
                     for j in range(len(alpha_x[0,:])):
 #                    '''calculate deflection angles using simpsons rule.  Uses 
@@ -199,6 +202,54 @@ class GravitationalLens(object):
                     
                         alpha_x[i,j] =1/np.pi * np.sum(self.kappa * (self.image_x[i,j]-self.x)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
                         alpha_y[i,j] =1/ np.pi * np.sum(self.kappa * (self.image_y[i,j]-self.y)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
+            
+            elif method == 'trapezoidal':  
+                # Compromise between simpsons rule and rectangle rule
+                # Creates weights array to avoid overhead in the for loops.
+                
+                weights = np.zeros([self.kappa.shape[0],self.kappa.shape[1]],float)
+                weights[0,0] = 1.0
+                weights[-1,0] = 1.0
+                weights[0,-1] = 1.0
+                weights[-1,-1] = 1.0
+                weights[0:,1:-1] =2.0
+                weights[1:-1,0:] +=2.0
+                K = 1.0/(np.pi*4.0)*weights*self.kappa*self.pixscale**2
+                
+                print(np.max(K))
+                if vectorized is True:
+                    
+                                        
+                    
+                    def Alpha_x(xprime,yprime,x,y,kappa_weighted):
+                        return np.sum(kappa_weighted*(xprime-x)/((xprime-x)**2+(yprime-y)**2))
+                    
+                    def Alpha_y(xprime,yprime,x,y,kappa_weighted):
+                        return np.sum(kappa_weighted*(yprime-y)/((xprime-x)**2+(yprime-y)**2))
+                    
+                    VAlpha_x = np.vectorize(Alpha_x, excluded = [2,3,4])
+                    VAlpha_y = np.vectorize(Alpha_y, excluded = [2,3,4])
+                    
+                    alpha_x = VAlpha_x(self.image_x, self.image_y, self.x, self.y , K)
+                    alpha_y = VAlpha_y(self.image_x, self.image_y, self.x, self.y , K)
+                    
+                                        
+                    
+                else:
+                    for i in range(len(alpha_x[:,0])):
+                        for j in range(len(alpha_x[0,:])):
+                            alpha_x[i,j] = np.sum(K*(self.image_x[i,j]-\
+                            self.x)/((self.image_x[i,j]-self.x)**2 + \
+                            (self.image_y[i,j]-self.y)**2))
+                        
+                            alpha_y[i,j] = np.sum(K*(self.image_y[i,j] \
+                            -self.y)/((self.image_x[i,j]-self.x)**2 + \
+                            (self.image_y[i,j]-self.y)**2))
+                        
+            else:
+                print('you must choose a valid method of integration')
+                print('your deflection angles will not be correct')
+            
             self.alpha_x = alpha_x
             self.alpha_y = alpha_y
             stop = time()
