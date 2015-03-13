@@ -100,8 +100,27 @@ class GravitationalLens(object):
         
 # ----------------------------------------------------------------------
  
-    def build_kappa_map(self):
-        self.kappa = None
+    def build_kappa_map(self, q, M, gamma, centroid=[0.025,0.025],rotation=0.0):
+        '''
+        Create kappa map using elliptical power-law profile.
+        M is Einstein mass (in solar masses), q is axis ratio, and gamma is
+        power-law index
+        '''
+        self.q = q
+        self.gamma = gamma
+        self.centroid = centroid
+        ThetaE = (4.0*constants.G*(M* units.solMass)/constants.c**2 *self.Dds/(self.Dd*self.Ds))**(1.0/2.0)
+        self.ThetaE = ThetaE.decompose()*3600.0*180.0/np.pi
+        self.rotation = rotation        
+        
+        assert self.x.shape == self.y.shape
+        
+        xprime = np.cos(self.rotation)*(self.x-self.centroid[0])+np.sin(self.rotation)*(self.y-self.centroid[1])
+        yprime = -np.sin(self.rotation)*(self.x-self.centroid[0])+np.cos(self.rotation)*(self.y-self.centroid[1])
+            
+        
+        
+        self.kappa = (3.0-gamma)/2.0 *(self.ThetaE.value/np.sqrt(self.q*xprime**2+yprime**2/self.q))**(gamma-1)
         return
         
 # ----------------------------------------------------------------------
@@ -538,6 +557,27 @@ class GravitationalLens(object):
                         for k in range(self.NY//self.n):
                             self.image[i,j,k] = f_interpolation(self.beta_y[j,k],self.beta_x[j,k])
                             
+        return
+
+# ---------------------------------------------------------------------
+   
+    def add_phase_errors(self):
+       raise Exception('Cant add phase errors just yet.\n')
+       
+       return
+       
+# ---------------------------------------------------------------------
+
+    def add_noise(self):
+        raise Exception('Cant add noise just yet.\n')
+        
+        return
+        
+# ---------------------------------------------------------------------
+       
+    def add_decoherence(self):     
+        raise Exception('Cant add decoherence just yet.\n')
+        
         return
 
 # ---------------------------------------------------------------------
