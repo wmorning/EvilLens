@@ -9,7 +9,7 @@ Simulating images and visibilities of gravitationally lensed galaxies, behind Ya
 * [Plot testing](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/master/PlottingTest.ipynb)
 * [Image Testing](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/master/LensedImageTest.ipynb)
 * [Error Metric Demonstration](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/master/ErrorMetricDemo.ipynb)
-
+* [Antenna Effects Demonstration](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/master/AntennaEffects.ipynb)
 
 ## Authors
 
