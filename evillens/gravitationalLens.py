@@ -496,8 +496,6 @@ class GravitationalLens(object):
         Write a lensed image to a fits file to feed into an 
         observing simulator.
         '''        
-        if self.image == None:
-            raise Exception('No image to write to fitsfile yet.\n')
         
         hdu = fits.PrimaryHDU(self.image)
         hdu.header['CDELT1'] = self.pixscale / 3600.0
@@ -557,27 +555,6 @@ class GravitationalLens(object):
                         for k in range(self.NY//self.n):
                             self.image[i,j,k] = f_interpolation(self.beta_y[j,k],self.beta_x[j,k])
                             
-        return
-
-# ---------------------------------------------------------------------
-   
-    def add_phase_errors(self):
-       raise Exception('Cant add phase errors just yet.\n')
-       
-       return
-       
-# ---------------------------------------------------------------------
-
-    def add_noise(self):
-        raise Exception('Cant add noise just yet.\n')
-        
-        return
-        
-# ---------------------------------------------------------------------
-       
-    def add_decoherence(self):     
-        raise Exception('Cant add decoherence just yet.\n')
-        
         return
 
 # ---------------------------------------------------------------------
