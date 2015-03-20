@@ -48,9 +48,9 @@ class Saboteur(object):
         '''
         casa=drivecasa.Casapy()
         
-        path = str(MeasurementSet)        
+        self.path = str(MeasurementSet)        
         
-        script = ['ms.open("%(path)s",nomodify=False)' % {"path": path}\
+        script = ['ms.open("%(path)s",nomodify=False)' % {"path": self.path}\
                   , 'recD=ms.getdata(["data"])', 'aD=recD["data"]', 'UVW=ms.getdata(["UVW"])', 'uvpoints=UVW["uvw"]'\
                   ,'u=uvpoints[0]', 'v=uvpoints[1]'\
                   , 'antD1=ms.getdata(["antenna1"])'\
@@ -153,19 +153,24 @@ class Saboteur(object):
                     
         phases = np.fft.ifft2(np.fft.ifftshift(p2,axes={0,1}))
         
+        
         f_interp = interpolate.RectBivariateSpline(x,y,phases.real,kx=1,ky=1)
         
-        phase_errors = np.zeros(int(max(self.antenna2)+1),complex)
+        phase_errors = np.zeros(int(max(self.antenna2)+1),float)
         for i in range(len(phase_errors)):
             phase_errors[i] = f_interp(self.antennaX[i],self.antennaY[i])
-            
-        visibilities_new = np.zeros(len(self.Visibilities),complex)
     
-        for i in range(len(visibilities_new)):
-            self.Visibilities[i] *= np.exp(phase_errors[self.antenna1[i]]*1j+phase_errors[self.antenna2[i]]*1j)
+        self.phase_errors = phase_errors
+        for i in range(len(self.Visibilities)):
+            self.Visibilities[i] *= np.exp(phase_errors[self.antenna1[i]]*1j-phase_errors[self.antenna2[i]]*1j)
         
         return
         
+  # -------------------------------------------------------------------------
+    
+    def sabotage_measurement_set(self):
+        '''
+        Write the corrupted visibilities back to the original measurement set.
+        '''
+    
         
-    
-    
