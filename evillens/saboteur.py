@@ -10,6 +10,7 @@ import numpy as np
 import evillens as evil
 from scipy import interpolate
 import drivecasa
+import subprocess
 
 # ===========================================================================
 
@@ -20,6 +21,7 @@ class Saboteur(object):
 
     def __init__(self, K, wavelength):
         
+        self.path = None
         self.Visibilities = None
         self.antenna1 = None
         self.antenna2 = None
@@ -171,6 +173,31 @@ class Saboteur(object):
     def sabotage_measurement_set(self):
         '''
         Write the corrupted visibilities back to the original measurement set.
-        '''
-    
+        For this copy measurement set into new set 
+        /path/measurementset_sabotaged.ms
+        '''        
         
+        #create location for new ms, and copy old ms to new location
+        self.path_new = self.path[:-3]+'_sabotaged.ms'
+        command = 'cp -R '+self.path+'/ '+self.path_new
+        subprocess.call(command)
+        
+        visibilities_new = [] #new visibilities to be passed to CASA as a list
+        for i in range(len(self.Visibilities)):
+            visibilities_new.append(self.Visibilities[i])
+            
+        
+        script = ['ms.open("%(path)s",nomodify=False)' % {"path": self.path_new}\
+                      ,'recD=ms.getdata(["data"])']
+        script.append('vis_new ='+str(visibilities_new))
+        script.append("recD['data'][0,0,:]=vis_new")
+        script.append("ms.putdata(recD)")
+        script.append("ms.close()")
+        
+        casa=drivecasa.Casapy()
+        output = casa.run_script(script)
+        print(output)
+        
+        
+        
+        return
