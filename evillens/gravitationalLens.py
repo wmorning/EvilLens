@@ -280,7 +280,7 @@ class GravitationalLens(object):
     
 # ----------------------------------------------------------------------    
     
-    def plot(self,mapname):    
+    def plot(self,mapname, caustics=True):    
         '''
         Plot the given map as a nice colorscale image, with contours.
         '''
@@ -456,6 +456,10 @@ class GravitationalLens(object):
             
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec')
+            if caustics is True:
+                plt.scatter(self.beta_x,self.beta_y, s=0.001)
+            else:
+                pass
             
         else:
             pass
