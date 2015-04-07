@@ -31,7 +31,7 @@ class AnalyticSIELens(evil.GravitationalLens):
         
 # ----------------------------------------------------------------------
  
-    def build_kappa_map(self, sigma=None,q3=None,centroid=None, r_c = None, inclination = None,rotation=0):
+    def build_kappa_map(self, sigma=None,q=None,centroid=None, r_c = None,rotation=0):
         '''
         Create kappa map using current parameters.  Also allows 
         user to manually set lens parameters if they want to.
@@ -44,28 +44,22 @@ class AnalyticSIELens(evil.GravitationalLens):
         '''
         if sigma is not None:
             self.sigma = sigma * units.km/units.s
-        if q3 is not None:
-            self.q3 = q3
+        if q is not None:
+            self.q = q
         if centroid is not None:
             assert len(centroid)==2
             self.centroid = centroid
         if r_c is not None:
             self.r_c = r_c
-        if inclination is not None:
-            self.inclination = inclination
         if rotation is not None:
             self.rotation = rotation
         
         #rotate axes by the rotation angle around the centroid of the lens
         xprime = np.cos(self.rotation)*(self.x-self.centroid[0])+np.sin(self.rotation)*(self.y-self.centroid[1])
         yprime = -np.sin(self.rotation)*(self.x-self.centroid[0])+np.cos(self.rotation)*(self.y-self.centroid[1])
-        
-           
-        #get 2-d axis ratio from 3d axis ratio and inclination
-        self.q = np.sqrt((self.q3*np.cos(self.inclination))**2+np.sin(self.inclination)**2)
          
         #compute Einstein radius, in arcsec:
-        b = 4*np.pi *(self.sigma/constants.c)**2*(np.sqrt(1-self.q3**2)/np.arcsin(np.sqrt(1-self.q3**2)))*self.Dds/self.Ds
+        b = 4*np.pi *((self.sigma/constants.c)**2)*self.Dds/self.Ds
         self.b = b.decompose()*(3600.0*180.0/np.pi)
          
          # Now compute kappa using lens equation from Saas Fe.
