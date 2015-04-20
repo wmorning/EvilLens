@@ -119,22 +119,40 @@ class Saboteur(object):
         return
         
 # ---------------------------------------------------------------------------    
-    def add_phase_errors(self):
+    def add_phase_errors(self, v):
         '''
         Create coordinate grid of rms phases, using the phase structur function.
         Assign one phase to each antenna, determined using the antenna's position
         on the grid.  All visibilities are shifted by the phases assigned to each
-        of their antennas.
+        of their antennas.  This step is performed for several time steps, between
+        which the phase screen is translated.  For simplicity, the
+        translation will always be in the x-direction
+        -v determines the rate at which the phase grid translates.
         '''
         
+        self.velocity = v   
+        Nbaselines = (len(self.antennaX)*(len(self.antennaX)-1))
+        Ntsteps = len(self.Visibilities)//Nbaselines
         
+        #calculate positions of first and second antennas
+        xnew1 = np.zeros(len(self.Visibilities),float)
+        ynew1 = np.zeros(len(self.Visibilities),float)
+        xnew2 = np.zeros(len(self.Visibilities),float)
+        ynew2 = np.zeros(len(self.Visibilities),float)
+        for i in range(len(self.Visibilities)):
+            xnew1[i] = self.antennaX[self.antenna1[i]] +self.velocity*(i//Nbaselines)
+            ynew1[i] = self.antennaY[self.antenna1[i]]
+            xnew2[i] = self.antennaX[self.antenna2[i]] +self.velocity*(i//Nbaselines)
+            ynew2[i] = self.antennaX[self.antenna2[i]]
         
-        maxX = np.max(abs(self.antennaX))//100 *101
-        maxY = np.max(abs(self.antennaY))//100 *101
+        #First determine size of phase screen to within 100m (rounds up)
+        maxX = (np.max([np.max(abs(xnew1)),np.max(abs(xnew2)),np.max(abs(self.antennaY))])\
+                +self.velocity*Ntsteps) //100 *100+100
+
         
         
         x = np.arange(-maxX,maxX+10.0,10.0)
-        y = np.arange(-maxY,maxY+10.0,10.0)
+        y = np.arange(-maxX,maxX+10.0,10.0)
         X,Y = np.meshgrid(x,y)
         phases = np.random.normal(0.0,1.0,(len(x),len(y)))
         
@@ -154,17 +172,26 @@ class Saboteur(object):
                     p2[i,j] *= (np.pi/180.0)*(self.K/self.wavelength)
                     
         phases = np.fft.ifft2(np.fft.ifftshift(p2,axes={0,1}))
-        
+        self.phases=phases.real
         
         f_interp = interpolate.RectBivariateSpline(x,y,phases.real,kx=1,ky=1)
         
-        phase_errors = np.zeros(int(max(self.antenna2)+1),float)
-        for i in range(len(phase_errors)):
-            phase_errors[i] = f_interp(self.antennaX[i],self.antennaY[i])
-    
-        self.phase_errors = phase_errors
-        for i in range(len(self.Visibilities)):
-            self.Visibilities[i] *= np.exp(phase_errors[self.antenna1[i]]*1j-phase_errors[self.antenna2[i]]*1j)
+        phase_errors1 = np.zeros(len(xnew1),float)
+        phase_errors2 = np.zeros(len(xnew2),float)
+        for i in range(len(phase_errors1)):
+            phase_errors1[i] = f_interp(xnew1[i],ynew1[i])
+            phase_errors2[i] = f_interp(xnew2[i],ynew2[i])
+            
+        self.xnew1 = xnew1
+        self.xnew2 = xnew2
+        self.ynew1 = ynew1
+        self.ynew2 = ynew2
+        self.x = X
+        self.y = Y
+        self.phase_errors1 = phase_errors1
+        self.phase_errors2 = phase_errors2
+        
+        self.Visibilities *= np.exp(phase_errors1*1j-phase_errors2*1j)     
         
         return
         
