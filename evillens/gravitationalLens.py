@@ -180,7 +180,7 @@ class GravitationalLens(object):
 
 # ----------------------------------------------------------------------
     
-    def deflect(self, method='simpsons', vectorized = False):
+    def deflect(self, method='simpsons', fast=False):
         
         if self.kappa is None:
             self.alpha_x = None
@@ -235,25 +235,24 @@ class GravitationalLens(object):
                 weights[1:-1,0:] +=2.0
                 K = 1.0/(np.pi*4.0)*weights*self.kappa*self.pixscale**2
                 
-                print(np.max(K))
-                if vectorized is True:
-                    
-                                        
-                    
-                    def Alpha_x(xprime,yprime,x,y,kappa_weighted):
-                        return np.sum(kappa_weighted*(xprime-x)/((xprime-x)**2+(yprime-y)**2))
-                    
-                    def Alpha_y(xprime,yprime,x,y,kappa_weighted):
-                        return np.sum(kappa_weighted*(yprime-y)/((xprime-x)**2+(yprime-y)**2))
-                    
-                    VAlpha_x = np.vectorize(Alpha_x, excluded = [2,3,4])
-                    VAlpha_y = np.vectorize(Alpha_y, excluded = [2,3,4])
-                    
-                    alpha_x = VAlpha_x(self.image_x, self.image_y, self.x, self.y , K)
-                    alpha_y = VAlpha_y(self.image_x, self.image_y, self.x, self.y , K)
-                    
-                                        
-                    
+                if fast is True:
+                    for i in range(len(alpha_y[:,0])):
+                        K2 = K*(self.image_y[i,0]-self.y)
+                        y2 = (self.image_y[i,0]-self.y)**2
+                        
+                        for j in range(len(alpha_y[0,:])):
+                            alpha_y[i,j] = np.sum(K2/(y2 \
+                            +(self.image_x[i,j]-self.x)**2))
+                    for j in range(len(alpha_x[0,:])):
+                        K2 = K*(self.image_x[0,j]-self.x)
+                        x2 = (self.image_x[0,j]-self.x)**2
+                        
+                        for i in range(len(alpha_x[:,0])):
+                            alpha_x[i,j] = np.sum(K2/(x2+ \
+                            (self.image_y[i,j]-self.y)**2))
+                        
+                
+                
                 else:
                     for i in range(len(alpha_x[:,0])):
                         for j in range(len(alpha_x[0,:])):
@@ -264,6 +263,8 @@ class GravitationalLens(object):
                             alpha_y[i,j] = np.sum(K*(self.image_y[i,j] \
                             -self.y)/((self.image_x[i,j]-self.x)**2 + \
                             (self.image_y[i,j]-self.y)**2))
+                
+                    
                         
             else:
                 print('you must choose a valid method of integration')
@@ -539,7 +540,7 @@ class GravitationalLens(object):
                 
                 #  first create empty image with dimensions NX, NY
                 #  (we should make this more general later)  
-                self.image = np.empty([self.NX//self.n,self.NY//self.n],float)
+                self.image = np.empty([self.NY//self.n,self.NX//self.n],float)
             
                 #create bilinear interpolation function (assumes uniform grid of x,y)
                 f_interpolation = interpolate.RectBivariateSpline(self.source.beta_y[:,0],self.source.beta_x[0,:],self.source.intensity,kx=1,ky=1)            
@@ -638,7 +639,7 @@ if __name__ == '__main__':
     print "  cf. Dds = ", lens.Dds
     print "Critical density = ",lens.SigmaCrit
 
-    lens.read_kappa_from("examples/test_kappa.fits")
+    lens.read_kappa_from("/Users/wmorning/Research/EvilLens/examples/test_kappa.fits")
     lens.plot("kappa")
             
 # ======================================================================
