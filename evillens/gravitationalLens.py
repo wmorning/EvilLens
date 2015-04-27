@@ -16,8 +16,6 @@ from scipy import interpolate
 from scipy.integrate import simps
 from time import time
 
-
-
 # ======================================================================
 
 class GravitationalLens(object):
@@ -374,11 +372,15 @@ class GravitationalLens(object):
                            wspace=0.1,\
                            hspace=0.1)
         
-        # Finish setting up the options.
-        # 1) Images need extents, if x and y are not pixel numbers:
         
         # 2) The cubehelix map is linear grayscale on a BW printer
-        options['cmap'] = plt.get_cmap('cubehelix')
+        #    for non-lensed image, if caustics are to be plotted, 
+        #    use inverse cubehelix
+        if mapname =="non-lensed image":
+            if caustics is True:
+                options['cmap'] = plt.get_cmap('cubehelix_r')
+        else:
+            options['cmap'] = plt.get_cmap('cubehelix')
         
         # Start the figure:
         fig = plt.figure(**figprops)
@@ -459,6 +461,8 @@ class GravitationalLens(object):
             plt.ylabel('y / arcsec')
             if caustics is True:
                 plt.scatter(self.beta_x,self.beta_y, s=0.001)
+                plt.xlim(np.min(self.source.beta_x),np.max(self.source.beta_x))
+                plt.ylim(np.min(self.source.beta_y),np.max(self.source.beta_y))
             else:
                 pass
             
@@ -527,9 +531,12 @@ class GravitationalLens(object):
         else:
             
             #  give each pixel in the image an x,y position, should be same as image_x, image_y
-            theta_x = np.arange(-(self.NX//self.n)/2.0,(self.NX//self.n)/2.0,1.0)*self.pixscale+self.pixscale+self.pixel_offset
-            theta_y = np.arange(-(self.NY//self.n)/2.0,(self.NY//self.n)/2.0,1.0)*self.pixscale+self.pixscale+self.pixel_offset
-            self.theta_x,self.theta_y = np.meshgrid(theta_x,theta_y)
+            self.theta_x = np.copy(self.image_x)
+            self.theta_y = np.copy(self.image_y)            
+            
+            #theta_x = np.arange(-(self.NX//self.n)/2.0,(self.NX//self.n)/2.0,1.0)*self.pixscale+self.pixscale+self.pixel_offset
+            #theta_y = np.arange(-(self.NY//self.n)/2.0,(self.NY//self.n)/2.0,1.0)*self.pixscale+self.pixscale+self.pixel_offset
+            #self.theta_x,self.theta_y = np.meshgrid(theta_x,theta_y)
             
             #Find the corresponding angles in the source plane              
             self.beta_x = self.theta_x-self.alpha_x
