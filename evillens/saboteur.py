@@ -206,7 +206,7 @@ class Saboteur(object):
         
         #create location for new ms, and copy old ms to new location
         self.path_new = self.path[:-3]+'_sabotaged.ms'
-        command = 'cp -R '+self.path+'/ '+self.path_new
+        command = ['cp', '-R ',self.path+'/',self.path_new]
         subprocess.call(command)
         
         visibilities_new = [] #new visibilities to be passed to CASA as a list
