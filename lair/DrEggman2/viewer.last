@@ -1,0 +1,12 @@
+taskname           = "viewer"
+infile             =  "DrEggman2.alma.cycle2.7.ms"
+displaytype        =  "raster"
+channel            =  0
+zoom               =  1
+outfile            =  ""
+outscale           =  1.0
+outdpi             =  300
+outformat          =  "jpg"
+outlandscape       =  False
+gui                =  True
+#viewer(infile="DrEggman2.alma.cycle2.7.ms",displaytype="raster",channel=0,zoom=1,outfile="",outscale=1.0,outdpi=300,outformat="jpg",outlandscape=False,gui=True)
