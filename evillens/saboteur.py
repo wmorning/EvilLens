@@ -89,7 +89,7 @@ class Saboteur(object):
         Holdaway.
         '''
         b = np.sqrt(self.u**2+self.v**2)
-        print(len(b))
+        
         for i in range(len(b)):
             if b[i] <= self.W:
                 self.Visibilities[i] *= np.exp(-((self.K/self.wavelength)*(b[i]/1000)**(5.0/6.0)*(np.pi/180.0))**2/2)
@@ -206,7 +206,7 @@ class Saboteur(object):
         
         #create location for new ms, and copy old ms to new location
         self.path_new = self.path[:-3]+'_sabotaged.ms'
-        command = 'cp -R '+self.path+'/ '+self.path_new
+        command = ['cp','-R', self.path+'/', self.path_new+'/']
         subprocess.call(command)
         
         visibilities_new = [] #new visibilities to be passed to CASA as a list
