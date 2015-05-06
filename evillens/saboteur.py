@@ -9,8 +9,12 @@ Created on Thu Feb 26 15:06:23 2015
 import numpy as np
 import evillens as evil
 from scipy import interpolate
-import drivecasa
 import subprocess
+try:
+    import drivecasa
+except ImportError:
+    print("failed to load drivecasa.  You may not be able to use saboteur")
+
 
 # ===========================================================================
 
@@ -79,6 +83,7 @@ class Saboteur(object):
         antennaparams = np.genfromtxt(str(CASAdir)+str(antennaconfig))
         self.antennaX = antennaparams[:,0]
         self.antennaY = antennaparams[:,1]
+        self.antennaZ = antennaparams[:,2]
         
 # ---------------------------------------------------------------------------        
 
@@ -88,7 +93,8 @@ class Saboteur(object):
         error and convolve the visibilities using equation 4 in Carilli and 
         Holdaway.
         '''
-        b = np.sqrt(self.u**2+self.v**2)
+        b = np.sqrt((self.antennaX[self.antenna1]-self.antennaX[self.antenna2])**2\
+                    +(self.antennaY[self.antenna1]-self.antennaY[self.antenna2])**2)
         
         for i in range(len(b)):
             if b[i] <= self.W:
