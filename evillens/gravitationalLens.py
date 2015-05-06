@@ -36,7 +36,7 @@ class GravitationalLens(object):
         self.compute_distances()
         
         # Make a default pixel grid:
-        self.setup_grid(NX=100,NY=100,pixscale=0.1, n=1,offset=0.5)
+        self.setup_grid(NX=100,NY=100,pixscale=0.1, n=1, n2=1,offset=0.5)
         
         return
 
@@ -58,11 +58,12 @@ class GravitationalLens(object):
  
 # ----------------------------------------------------------------------
 
-    def setup_grid(self,NX=None,NY=None,pixscale=None, n=None , offset=None):
+    def setup_grid(self,NX=None,NY=None,pixscale=None, n=None , n2=None, offset=None):
         '''
         Make two arrays, x and y, that define the extent of the maps
         - pixscale is the size of a pixel, in arcsec.
         - n is oversampling factor between kappa and image maps
+        - n2 is size of image pixels relative to density pixels
         - offset is diagonal offset of kappa and image pixels
         '''
         if NX is not None: 
@@ -73,6 +74,8 @@ class GravitationalLens(object):
             self.pixscale = pixscale
         if n is not None:
             self.n = int(n)
+        if n2 is not None:
+            self.n2 = int(n2)
         if offset is not None:
             self.offset = offset
         
@@ -86,8 +89,8 @@ class GravitationalLens(object):
         #WRM:  here we build new grid for the image and source pixels,
         #      purposefully misaligned with the kappa pixels, so no NaNs occur.        
         self.pixel_offset = self.offset*self.pixscale
-        image_xgrid = np.arange(-(self.NX//self.n)/2.0,(self.NX//self.n)/2.0,1.0)*self.pixscale+self.pixscale-self.pixel_offset
-        image_ygrid = np.arange(-(self.NY//self.n)/2.0,(self.NY/self.n)/2.0,1.0)*self.pixscale+self.pixscale-self.pixel_offset
+        image_xgrid = np.arange(-(self.NX//self.n)/2.0,(self.NX//self.n)/2.0,1.0)*self.n2*self.pixscale+self.n2*self.pixscale-self.pixel_offset
+        image_ygrid = np.arange(-(self.NY//self.n)/2.0,(self.NY/self.n)/2.0,1.0)*self.n2*self.pixscale+self.n2*self.pixscale-self.pixel_offset
         self.image_x, self.image_y = np.meshgrid(image_xgrid,image_ygrid)
         self.NX_image,self.NY_image = self.image_x.shape        
         
@@ -151,6 +154,10 @@ class GravitationalLens(object):
             self.n = self.hdr['NPADDING']
         else:
             self.n = 1
+        if 'NPAD2' in self.hdr.keys():
+            self.n2 = self.hdr['NPAD2']
+        else:
+            self.n2 = 1
             
         self.setup_grid()
         
@@ -214,11 +221,27 @@ class GravitationalLens(object):
 #                principle this is less accurate than simpson's rule, but
 #                it is significantly faster.
 #                '''
-                for i in range(len(alpha_x[:,0])):
-                    for j in range(len(alpha_x[0,:])):
+                if fast is True:
                     
-                        alpha_x[i,j] =1/np.pi * np.sum(self.kappa * (self.image_x[i,j]-self.x)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
-                        alpha_y[i,j] =1/ np.pi * np.sum(self.kappa * (self.image_y[i,j]-self.y)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
+                    K = self.kappa/np.pi*self.pixscale**2
+                    for i in range(len(alpha_y[:,0])):
+                        K2 = K*(self.image_y[i,0]-self.y)
+                        y2 = (self.image_y-self.y)**2
+                        for j in range(len(alpha_y[0,:])):
+                            alpha_y[i,j] = np.sum(K2/(y2 \
+                            + (self.image_x[i,j]-self.x)**2))
+                    for j in range(len(alpha_x[0,:])):
+                        K2 = K*(self.image_x[0,j]-self.x)
+                        x2 = (self.image_x[0,j]-self.x)**2
+                        for i in range(len(alpha_x[:,0])):
+                            alpha_x[i,j] = np.sum(K2/(x2 \
+                            +(self.image_y[i,j]-self.y)**2))
+                else:
+                    for i in range(len(alpha_x[:,0])):
+                        for j in range(len(alpha_x[0,:])):
+                    
+                            alpha_x[i,j] =1/np.pi * np.sum(self.kappa * (self.image_x[i,j]-self.x)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
+                            alpha_y[i,j] =1/ np.pi * np.sum(self.kappa * (self.image_y[i,j]-self.y)/((self.image_x[i,j]-self.x)**2+(self.image_y[i,j]-self.y)**2)*self.pixscale**2)
             
             elif method == 'trapezoidal':  
                 # Compromise between simpsons rule and rectangle rule
@@ -492,6 +515,7 @@ class GravitationalLens(object):
         hdu.header['CDELT1'] = self.pixscale / 3600.0
         hdu.header['CDELT2'] = self.pixscale / 3600.0
         hdu.header['NPADDING'] = self.n
+        hdu.header['NPAD2']= self.n2
         
         
         hdu.writeto(fitsfile,clobber=True)
@@ -585,11 +609,13 @@ class GravitationalLens(object):
         assert self.kappa.shape == right.kappa.shape
         assert abs(self.pixscale - right.pixscale) <10**-10
         assert self.n == right.n
+        assert self.n2 ==right.n2
         
         newLens = GravitationalLens(self.Zd,self.Zs)
         newLens.NX,newLens.NY = self.kappa.shape
         newLens.pixscale = self.pixscale
         newLens.n = self.n
+        newLens.n2 = self.n2        
         
         # Set up a new pixel grid to go with this new kappa map:
         newLens.setup_grid()        
@@ -619,11 +645,13 @@ class GravitationalLens(object):
         assert self.kappa.shape == right.kappa.shape
         assert abs(self.pixscale - right.pixscale) <10**-10
         assert self.n == right.n
+        assert self.n2 == right.n2
         
         newLens = GravitationalLens(self.Zd,self.Zs)
         newLens.NX,newLens.NY = self.kappa.shape
         newLens.pixscale = self.pixscale
-        newLens.n = self.n        
+        newLens.n = self.n    
+        newLens.n2 = self.n2
         
         # Set up a new pixel grid to go with this new kappa map:
         newLens.setup_grid()        
