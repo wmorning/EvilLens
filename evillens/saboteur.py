@@ -93,8 +93,7 @@ class Saboteur(object):
         error and convolve the visibilities using equation 4 in Carilli and 
         Holdaway.
         '''
-        b = np.sqrt((self.antennaX[self.antenna1]-self.antennaX[self.antenna2])**2\
-                    +(self.antennaY[self.antenna1]-self.antennaY[self.antenna2])**2)
+        b = np.sqrt(self.u**2+self.v**2)
         
         for i in range(len(b)):
             if b[i] <= self.W:
