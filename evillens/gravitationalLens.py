@@ -32,7 +32,7 @@ class GravitationalLens(object):
         self.kappa = None
 
         # Calculate distances and the critical density:
-        self.cosmological = FlatLambdaCDM(H0=70, Om0=0.3)
+        self.cosmological = FlatLambdaCDM(H0=71.0, Om0=0.2669)
         self.compute_distances()
         
         # Make a default pixel grid:
