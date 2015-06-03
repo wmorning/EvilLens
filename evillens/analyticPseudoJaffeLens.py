@@ -64,7 +64,7 @@ class AnalyticPseudoJaffeLens(evil.GravitationalLens):
 
 if __name__ == '__main__':
 
-    PSJlens = evil.AnalyticPseudoJaffeLens(0.4,3.0)
+    PSJlens = evil.AnalyticPseudoJaffeLens(0.5,3.0)
     PSJlens.setup_grid(NX=100,NY=100,pixscale=0.01)
     PSJlens.build_kappa_map(1.0*10**8,0.1,[0.0005,0.0005])
     
