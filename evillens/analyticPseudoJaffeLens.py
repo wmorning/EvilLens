@@ -39,23 +39,23 @@ class AnalyticPseudoJaffeLens(evil.GravitationalLens):
         self.M = float(M)*units.solMass
         self.a = a
         self.centroid = centroid
-        self.n = n
+        self.n_outer = n
         self.gamma = GAMMA
-        if self.n ==3:
+        if self.n_outer ==3:
             raise Exception("this profile doesn't work for n=3 \n")
         #first compute convergence scale kappa_0
         
-        self.kappa_0 = (self.M/(2.0*np.pi*(self.a/(3600.0*180.0/np.pi)*self.Dd)**2*sp.beta((self.n-3)/2.0,(3-self.gamma)/2.0))/self.SigmaCrit).value
+        self.kappa_0 = (self.M/(2.0*np.pi*(self.a/(3600.0*180.0/np.pi)*self.Dd)**2*sp.beta((self.n_outer-3)/2.0,(3-self.gamma)/2.0))/self.SigmaCrit).value
         xi = np.sqrt((self.x-self.centroid[0])**2+(self.y-self.centroid[1])**2)/self.a
-        self.kappa = self.kappa_0*sp.beta((self.n-1)/2.0,1.0/2.0)*(1+xi**2)**((1-self.n)/2.0)*sp.hyp2f1((self.n-1)/2.0,self.gamma/2.0,self.n/2.0,1/(1+xi**2))
+        self.kappa = self.kappa_0*sp.beta((self.n_outer-1)/2.0,1.0/2.0)*(1+xi**2)**((1-self.n_outer)/2.0)*sp.hyp2f1((self.n_outer-1)/2.0,self.gamma/2.0,self.n_outer/2.0,1/(1+xi**2))
         
         return
 # ---------------------------------------------------------------------------
     def deflect(self):
         xi =np.sqrt((self.image_x-self.centroid[0])**2+(self.image_y-self.centroid[1])**2)/self.a 
-        alpha = 2*self.kappa_0*self.a/xi * (sp.beta((self.n-3)/2.0,(3-self.gamma)/2.0) \
-                - sp.beta((self.n-3)/2.0, 3.0/2.0) * (1+xi**2)**((3-self.n)/2.0)\
-                * sp.hyp2f1((self.n-3)/2.0,self.gamma/2.0,self.n/2.0,1/(1+xi**2)))
+        alpha = 2*self.kappa_0*self.a/xi * (sp.beta((self.n_outer-3)/2.0,(3-self.gamma)/2.0) \
+                - sp.beta((self.n_outer-3)/2.0, 3.0/2.0) * (1+xi**2)**((3-self.n_outer)/2.0)\
+                * sp.hyp2f1((self.n_outer-3)/2.0,self.gamma/2.0,self.n_outer/2.0,1/(1+xi**2)))
                 
         self.alpha_x = alpha*self.image_x/np.sqrt(self.image_x**2+self.image_y**2)
         self.alpha_y = alpha*self.image_y/np.sqrt(self.image_x**2+self.image_y**2)
