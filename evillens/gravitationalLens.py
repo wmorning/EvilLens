@@ -603,7 +603,7 @@ class GravitationalLens(object):
         '''        
         
         #raise Exception("Cannot add lenses yet.\n")
-        if issubclass(type(self),type(right)) is False and issubclass(type(right),type(self)) is False :
+        if issubclass(type(self),GravitationalLens) is False and issubclass(type(right),GravitationalLens) is False :
             raise TypeError('unsupported operand type(s)')
         assert len(self.kappa.shape) == len(right.kappa.shape)
         assert self.kappa.shape == right.kappa.shape
@@ -639,7 +639,7 @@ class GravitationalLens(object):
         differences in kappa or lensed images.
         '''
         #raise Exception("Cannot subtract lenses yet.\n")
-        if issubclass(type(self),type(right)) is False and issubclass(type(right),type(self)) is False:
+        if issubclass(type(self),GravitationalLens) is False and issubclass(type(right),GravitationalLens) is False:
             raise TypeError('unsupported operand type(s)')
         assert len(self.kappa.shape) == len(right.kappa.shape)
         assert self.kappa.shape == right.kappa.shape
