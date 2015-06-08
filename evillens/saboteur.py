@@ -79,7 +79,7 @@ class Saboteur(object):
         self.antenna2 = np.array((data[0][37].split())[1::3],int)
         
         #get list of antenna coordinates using location given in casapath
-        self.get_antenena_coordinates(antennaconfig)
+        self.get_antenna_coordinates(antennaconfig)
         
 # ---------------------------------------------------------------------------
         
@@ -181,6 +181,7 @@ class Saboteur(object):
         translation will always be in the x-direction
         -v determines the rate at which the phase grid translates.
         '''
+        
         self.get_phases(v)
         
         f_interp = interpolate.RectBivariateSpline(self.phasecoords_x,self.phasecoords_y,self.phases,kx=1,ky=1)
@@ -195,7 +196,13 @@ class Saboteur(object):
         
         return
         
-  # -------------------------------------------------------------------------
+# -------------------------------------------------------------------------
+    
+    def add_noise(self,rms):
+        for i in range(len(self.Visibilities)):
+            self.Visibilities[i]+= np.random.normal(0.0,rms)+1j*np.random.normal(0.0,rms)
+        return
+# -------------------------------------------------------------------------
     
     def sabotage_measurement_set(self):
         '''

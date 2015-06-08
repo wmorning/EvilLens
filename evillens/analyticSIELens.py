@@ -7,8 +7,6 @@ Created on Mon Sep 29 22:53:20 2014
 # ======================================================================
 
 from astropy import units, constants
-from astropy.cosmology import FlatLambdaCDM
-
 import numpy as np
 import evillens as evil
 
