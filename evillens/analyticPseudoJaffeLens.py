@@ -57,8 +57,8 @@ class AnalyticPseudoJaffeLens(evil.GravitationalLens):
                 - sp.beta((self.n_outer-3)/2.0, 3.0/2.0) * (1+xi**2)**((3-self.n_outer)/2.0)\
                 * sp.hyp2f1((self.n_outer-3)/2.0,self.gamma/2.0,self.n_outer/2.0,1/(1+xi**2)))
                 
-        self.alpha_x = alpha*self.image_x/np.sqrt(self.image_x**2+self.image_y**2)
-        self.alpha_y = alpha*self.image_y/np.sqrt(self.image_x**2+self.image_y**2)
+        self.alpha_x = alpha*(self.image_x-self.centroid[0])/np.sqrt((self.image_x-self.centroid[0])**2+(self.image_y-self.centroid[1])**2)
+        self.alpha_y = alpha*(self.image_y-self.centroid[1])/np.sqrt((self.image_x-self.centroid[0])**2+(self.image_y-self.centroid[1])**2)
         
 # ======================================================================
 
