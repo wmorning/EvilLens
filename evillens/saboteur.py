@@ -92,6 +92,9 @@ class Saboteur(object):
         self.antennaY = antennaparams[:,1]
         self.antennaZ = antennaparams[:,2]
         
+        self.antennaX -= (np.max(self.antennaX)+np.min(self.antennaX))/2.0
+        self.antennaY -= (np.max(self.antennaY)+np.min(self.antennaY))/2.0
+        
 # ---------------------------------------------------------------------------        
 
     def add_decoherence(self):
@@ -138,30 +141,37 @@ class Saboteur(object):
         self.velocity = v   
         Nbaselines = (len(self.antennaX)*(len(self.antennaX)-1))
         Ntsteps = len(self.Visibilities)//Nbaselines
-        maxX = np.max([np.max(abs(self.antennaX))+self.velocity*Ntsteps \
-                       ,np.max(abs(self.antennaY))+self.velocity*Ntsteps])//100 *100 +100
         
-        x = np.arange(-maxX,maxX+10.0,10.0)
-        y = np.arange(-maxX,maxX+10.0,10.0)
-        X,Y = np.meshgrid(x,y)
-        phases = np.random.normal(0.0,1.0,(len(x),len(y)))
+        #determine size of the grid        
+        maxX = (np.max(self.antennaX) + (np.max(self.antennaX)-np.min(self.antennaX))\
+               +self.velocity*Ntsteps) //100 *100 +100
+        minX = np.min(self.antennaX) //100 *100 -100
+        maxY = 2 * (np.max(self.antennaY) //100 *100+100)
+        minY = 2 * (np.min(self.antennaY) //100 *100-100)        
         
-        p2 = np.fft.fftshift(np.fft.fft2(phases),axes={0,1})
-        FreqX = np.fft.fftshift(np.fft.fftfreq(len(x), x[1]-x[0] ))
-        FreqY = np.fft.fftshift(np.fft.fftfreq(len(y), y[1]-y[0] ))
+        x = np.arange(minX,maxX+10.0,10.0)
+        y = np.arange(minY,maxY+10.0,10.0)
+        phases = np.random.normal(0.0,1.0,(len(y),len(x)))
+        
+        p2 = np.fft.fft2(phases)
+        FreqX = np.fft.fftfreq(len(x), 1.0/float(len(x)) )*2.0*np.pi/(x[-1]-x[0])
+        FreqY = np.fft.fftfreq(len(y), 1.0/float(len(y))) *2.0*np.pi/(y[-1]-y[0])
         
         for i in range(len(FreqX)):
             for j in range(len(FreqY)):
                 if np.sqrt(FreqX[i]**2+FreqY[j]**2)>1.0/1000.0:
-                    p2[i,j] *= (np.pi/180.0)*(self.K/self.wavelength) \
-                               *(0.001/np.sqrt(FreqX[i]**2+FreqY[j]**2))**(5.0/6.0)
+                    p2[j,i] *= (np.pi/180.0)*(self.K/self.wavelength) \
+                               *np.sqrt(0.0365)*(1000.0*np.sqrt(FreqX[i]**2 \
+                               +FreqY[j]**2))**(-11.0/6.0)
                 elif np.sqrt(FreqX[i]**2+FreqY[j]**2)<=1.0/1000.0 and np.sqrt(FreqX[i]**2+FreqY[j]**2)>1.0/6000.0:
-                    p2[i,j] *= (np.pi/180.0)*(self.K/self.wavelength) \
-                               *(0.001/np.sqrt(FreqX[i]**2+FreqY[j]**2))**(1.0/3.0)
+                    p2[j,i] *= (np.pi/180.0)*(self.K/self.wavelength) \
+                               *np.sqrt(0.0365)*(1000.0*np.sqrt(FreqX[i]**2\
+                               +FreqY[j]**2))**(-5.0/6.0)
                 else:
-                    p2[i,j] *= (np.pi/180.0)*(self.K/self.wavelength)*(6.0)**(1.0/3.0)
+                    p2[j,i] *= (np.pi/180.0)*np.sqrt(0.0365) \
+                               *(self.K/self.wavelength)*(6.0)**(5.0/6.0)
                     
-        phases = np.fft.ifft2(np.fft.ifftshift(p2,axes={0,1}))
+        phases = np.fft.ifft2(p2)
         self.phases=phases.real
         self.phasecoords_x = x
         self.phasecoords_y = y
@@ -184,13 +194,20 @@ class Saboteur(object):
         
         self.get_phases(v)
         
-        f_interp = interpolate.RectBivariateSpline(self.phasecoords_x,self.phasecoords_y,self.phases,kx=1,ky=1)
+        f_interp = interpolate.RectBivariateSpline(self.phasecoords_y,self.phasecoords_x,self.phases,kx=1,ky=1)
         
         self.phase_errors1 = np.zeros(len(self.Visibilities),float)
         self.phase_errors2 = np.zeros(len(self.Visibilities),float)
         for i in range(len(self.phase_errors1)):
             self.phase_errors1[i] = f_interp(self.antennaX[self.antenna1[i]]+self.velocity*(i//self.Ntsteps),self.antennaY[self.antenna1[i]])
             self.phase_errors2[i] = f_interp(self.antennaX[self.antenna2[i]]+self.velocity*(i//self.Ntsteps),self.antennaY[self.antenna2[i]])
+        
+        self.antennaphases = np.zeros([len(self.antennaX),self.Ntsteps], float)
+        for i in range(self.Ntsteps):
+            for j in range(len(self.antennaX)):
+                self.antennaphases[j,i] = f_interp(self.antennaX[j]+self.velocity*i, self.antennaY[j])
+        
+        
         
         self.Visibilities *= np.exp(1j*(self.phase_errors1-self.phase_errors2))   
         
@@ -209,29 +226,52 @@ class Saboteur(object):
         Write the corrupted visibilities back to the original measurement set.
         For this copy measurement set into new set 
         /path/measurementset_sabotaged.ms
+        
+        Alternative method for large data sets.  Write visibilities to file 
+        individually.  Make new directory for these with name 
+        /path/measurement_sabotaged/.        
         '''        
         
-        #create location for new ms, and copy old ms to new location
-        self.path_new = self.path[:-3]+'_sabotaged.ms'
-        command = ['cp','-R', self.path+'/', self.path_new+'/']
-        subprocess.call(command)
+        if len(self.Visibilities)<10**6:
+            #create location for new ms, and copy old ms to new location
+            self.path_new = self.path[:-3]+'_sabotaged.ms'
+            command = ['cp','-R', self.path+'/', self.path_new+'/']
+            subprocess.call(command)
         
-        visibilities_new = [] #new visibilities to be passed to CASA as a list
-        for i in range(len(self.Visibilities)):
-            visibilities_new.append(self.Visibilities[i])
+            visibilities_new = [] #new visibilities to be passed to CASA as a list
+            for i in range(len(self.Visibilities)):
+                visibilities_new.append(self.Visibilities[i])
             
         
-        script = ['ms.open("%(path)s",nomodify=False)' % {"path": self.path_new}\
+            script = ['ms.open("%(path)s",nomodify=False)' % {"path": self.path_new}\
                       ,'recD=ms.getdata(["data"])']
-        script.append('vis_new ='+str(visibilities_new))
-        script.append("recD['data'][0,0,:]=vis_new")
-        script.append("ms.putdata(recD)")
-        script.append("ms.close()")
+            script.append('vis_new ='+str(visibilities_new))
+            script.append("recD['data'][0,0,:]=vis_new")
+            script.append("ms.putdata(recD)")
+            script.append("ms.close()")
         
-        casa=drivecasa.Casapy()
-        output = casa.run_script(script)
-        print(output)
+            casa=drivecasa.Casapy()
+            output = casa.run_script(script)
+            print(output)
         
-        
+        else:
+            self.path_new = self.path[:-3]+'_sabotaged/'
+            command = ['mkdir', self.path_new]
+            subprocess.call(command)
+            
+            f = open(self.path_new+'Vis_real.txt', 'w')
+            for i in range(len(self.Visibilities)):
+                f.write(str(self.Visibilities[i].real))
+                f.write('\n')
+            f.close()
+            
+            f = open(self.path_new+'Vis_imag.txt', 'w')
+            for i in range(len(self.Visibilities)):
+                f.write(str(self.Visibilities[i].imag))
+                f.write('\n')
+            f.close()
+            
+            
+                
         
         return
