@@ -40,6 +40,7 @@ class Saboteur(object):
         
         self.antennaX = None
         self.antennaY = None
+        self.phases = None
         return
     
 # ---------------------------------------------------------------------------
@@ -100,18 +101,21 @@ class Saboteur(object):
     def add_decoherence(self):
         '''
         Add decoherence to visibilities.  Use baseline to determine rms phase 
-        error and convolve the visibilities using equation 4 in Carilli and 
+        error and scale the visibilities using equation 4 in Carilli and 
         Holdaway.
         '''
-        b = np.sqrt(self.u**2+self.v**2)
+#        b = np.sqrt(self.u**2+self.v**2)
         
-        for i in range(len(b)):
-            if b[i] <= self.W:
-                self.Visibilities[i] *= np.exp(-((self.K/self.wavelength)*(b[i]/1000)**(5.0/6.0)*(np.pi/180.0))**2/2)
-            elif b[i] >self.W and b[i] <= self.L0:
-                self.Visibilities[i] *= np.exp(-((self.K/self.wavelength)*(b[i]/1000)**(1.0/3.0)*(np.pi/180.0))**2/2)
+        for i in range(len(self.Visibilities)):
+            b = np.sqrt((self.antennaX[self.antenna1[i]]-self.antennaX[self.antenna2[i]])**2 \
+                +(self.antennaY[self.antenna1[i]]-self.antennaY[self.antenna2[i]])**2)
+            
+            if b <= self.W:
+                self.Visibilities[i] *= np.exp(-((self.K/(1000.0*self.wavelength))*(b/1000.0)**(5.0/6.0)*(np.pi/180.0))**2/2)
+            elif b >self.W and b <= self.L0:
+                self.Visibilities[i] *= np.exp(-((self.K/(1000.0*self.wavelength))*(b/1000.0)**(1.0/3.0)*(np.pi/180.0))**2/2)
             else:
-                self.Visibilities[i] *= np.exp(-((self.K/self.wavelength)*(np.pi/180.0))**2/2)
+                self.Visibilities[i] *= np.exp(-((self.K/(1000.0*self.wavelength))*(np.pi/180.0)*(6.0**(1.0/3.0)))**2/2)
             
         return
 
@@ -139,7 +143,7 @@ class Saboteur(object):
         Create coordinate grid of rms phases, using the phase structure function.
         '''
         self.velocity = v   
-        Nbaselines = (len(self.antennaX)*(len(self.antennaX)-1))
+        Nbaselines = (len(self.antennaX)*(len(self.antennaX)-1))/2
         Ntsteps = len(self.Visibilities)//Nbaselines
         
         #determine size of the grid        
@@ -168,7 +172,7 @@ class Saboteur(object):
                                *np.sqrt(0.0365)*(1000.0*np.sqrt(FreqX[i]**2\
                                +FreqY[j]**2))**(-5.0/6.0)
                 else:
-                    p2[j,i] *= (np.pi/180.0)*np.sqrt(0.0365) \
+                    p2[j,i] *= 0*(np.pi/180.0)*np.sqrt(0.0365) \
                                *(self.K/self.wavelength)*(6.0)**(5.0/6.0)
                     
         phases = np.fft.ifft2(p2)
@@ -191,21 +195,22 @@ class Saboteur(object):
         translation will always be in the x-direction
         -v determines the rate at which the phase grid translates.
         '''
+        if self.phases is None or v !=self.velocity:            
+            self.get_phases(v)
         
-        self.get_phases(v)
         
         f_interp = interpolate.RectBivariateSpline(self.phasecoords_y,self.phasecoords_x,self.phases,kx=1,ky=1)
         
         self.phase_errors1 = np.zeros(len(self.Visibilities),float)
         self.phase_errors2 = np.zeros(len(self.Visibilities),float)
         for i in range(len(self.phase_errors1)):
-            self.phase_errors1[i] = f_interp(self.antennaX[self.antenna1[i]]+self.velocity*(i//self.Ntsteps),self.antennaY[self.antenna1[i]])
-            self.phase_errors2[i] = f_interp(self.antennaX[self.antenna2[i]]+self.velocity*(i//self.Ntsteps),self.antennaY[self.antenna2[i]])
+            self.phase_errors1[i] = f_interp(self.antennaY[self.antenna1[i]],self.antennaX[self.antenna1[i]]+self.velocity*(i//self.Nbaselines))
+            self.phase_errors2[i] = f_interp(self.antennaY[self.antenna2[i]],self.antennaX[self.antenna2[i]]+self.velocity*(i//self.Nbaselines))
         
         self.antennaphases = np.zeros([len(self.antennaX),self.Ntsteps], float)
         for i in range(self.Ntsteps):
             for j in range(len(self.antennaX)):
-                self.antennaphases[j,i] = f_interp(self.antennaX[j]+self.velocity*i, self.antennaY[j])
+                self.antennaphases[j,i] = f_interp(self.antennaY[j],self.antennaX[j]+self.velocity*i)
         
         
         
