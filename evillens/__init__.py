@@ -3,3 +3,4 @@ from analyticSIELens import *
 from source import *
 from saboteur import *
 from analyticPseudoJaffeLens import *
+from analyticNFWLens import *
