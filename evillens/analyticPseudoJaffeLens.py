@@ -43,8 +43,7 @@ class AnalyticPseudoJaffeLens(evil.GravitationalLens):
         self.gamma = GAMMA
         if self.n_outer ==3:
             raise Exception("this profile doesn't work for n=3 \n")
-        #first compute convergence scale kappa_0
-        
+        #first compute convergence scale kappa_0.        
         self.kappa_0 = (self.M/(2.0*np.pi*(self.a/(3600.0*180.0/np.pi)*self.Dd)**2*sp.beta((self.n_outer-3)/2.0,(3-self.gamma)/2.0))/self.SigmaCrit).value
         xi = np.sqrt((self.x-self.centroid[0])**2+(self.y-self.centroid[1])**2)/self.a
         self.kappa = self.kappa_0*sp.beta((self.n_outer-1)/2.0,1.0/2.0)*(1+xi**2)**((1-self.n_outer)/2.0)*sp.hyp2f1((self.n_outer-1)/2.0,self.gamma/2.0,self.n_outer/2.0,1/(1+xi**2))
