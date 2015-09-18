@@ -95,6 +95,24 @@ class AnalyticSIELens(evil.GravitationalLens):
         self.alpha_y = np.sin(self.rotation)*alpha_x_prime+np.cos(self.rotation)*alpha_y_prime
                
         return
+        
+# ----------------------------------------------------------------------
+    def get_mass_inside(self,r):
+        '''
+        Returns mass inside a given radius r, where r is in kpc
+        '''
+        r = r*units.kpc
+        mass = (np.pi*self.sigma**2/constants.G*10.0*units.kpc).to(units.solMass)/np.sqrt(self.q)
+        
+        return mass
+
+# ----------------------------------------------------------------------
+    def print_mass_inside(self, r):
+        '''
+        Print mass inside a given radius r, where r is in kpc
+        '''
+        Mass_encl = self.get_mass_inside(r)
+        print('Mass Enclosed in ',r,' kpc is ',Mass_encl,' solar masses \n')
 
 # ======================================================================
 
