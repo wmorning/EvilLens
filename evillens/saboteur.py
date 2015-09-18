@@ -9,7 +9,10 @@ Created on Thu Feb 26 15:06:23 2015
 import numpy as np
 import evillens as evil
 from scipy import interpolate
+import matplotlib.pyplot as plt
 import subprocess
+import struct
+import astropy.convolution as astconv
 try:
     import drivecasa
 except ImportError:
@@ -138,14 +141,14 @@ class Saboteur(object):
         return
 # ---------------------------------------------------------------------------
         
-    def get_phases(self,v):
+    def get_phases(self, v , fast=False , cellsize = 10.0 ,convolution=False):
         '''
         Create coordinate grid of rms phases, using the phase structure function.
         '''
         self.velocity = v   
         Nbaselines = (len(self.antennaX)*(len(self.antennaX)-1))/2
         Ntsteps = len(self.Visibilities)//Nbaselines
-        
+        self.cellsize = cellsize
         #determine size of the grid        
         maxX = (np.max(self.antennaX) + (np.max(self.antennaX)-np.min(self.antennaX))\
                +self.velocity*Ntsteps) //100 *100 +100
@@ -153,30 +156,50 @@ class Saboteur(object):
         maxY = 2 * (np.max(self.antennaY) //100 *100+100)
         minY = 2 * (np.min(self.antennaY) //100 *100-100)        
         
-        x = np.arange(minX,maxX+10.0,10.0)
-        y = np.arange(minY,maxY+10.0,10.0)
+        x = np.arange(minX,maxX+cellsize,cellsize)
+        y = np.arange(minY,maxY+cellsize,cellsize)
         phases = np.random.normal(0.0,1.0,(len(y),len(x)))
         
         p2 = np.fft.fft2(phases)
         FreqX = np.fft.fftfreq(len(x), 1.0/float(len(x)) )*2.0*np.pi/(x[-1]-x[0])
         FreqY = np.fft.fftfreq(len(y), 1.0/float(len(y))) *2.0*np.pi/(y[-1]-y[0])
+        if fast==False:
+            for i in range(len(FreqX)):
+                for j in range(len(FreqY)):
+                    if np.sqrt(FreqX[i]**2+FreqY[j]**2)>1.0/1000.0:
+                        p2[j,i] *= (np.pi/180.0)*(self.K/self.wavelength) \
+                                *np.sqrt(0.0365)*(1000.0*np.sqrt(FreqX[i]**2 \
+                                +FreqY[j]**2))**(-11.0/6.0)
+                    elif np.sqrt(FreqX[i]**2+FreqY[j]**2)<=1.0/1000.0 and np.sqrt(FreqX[i]**2+FreqY[j]**2)>1.0/6000.0:
+                        p2[j,i] *= (np.pi/180.0)*(self.K/self.wavelength) \
+                                *np.sqrt(0.0365)*(1000.0*np.sqrt(FreqX[i]**2\
+                                +FreqY[j]**2))**(-5.0/6.0)
+                    else:
+                        p2[j,i] *= 0*(np.pi/180.0)*np.sqrt(0.0365) \
+                                *(self.K/self.wavelength)*(6.0)**(5.0/6.0)
         
-        for i in range(len(FreqX)):
-            for j in range(len(FreqY)):
-                if np.sqrt(FreqX[i]**2+FreqY[j]**2)>1.0/1000.0:
-                    p2[j,i] *= (np.pi/180.0)*(self.K/self.wavelength) \
-                               *np.sqrt(0.0365)*(1000.0*np.sqrt(FreqX[i]**2 \
-                               +FreqY[j]**2))**(-11.0/6.0)
-                elif np.sqrt(FreqX[i]**2+FreqY[j]**2)<=1.0/1000.0 and np.sqrt(FreqX[i]**2+FreqY[j]**2)>1.0/6000.0:
-                    p2[j,i] *= (np.pi/180.0)*(self.K/self.wavelength) \
-                               *np.sqrt(0.0365)*(1000.0*np.sqrt(FreqX[i]**2\
-                               +FreqY[j]**2))**(-5.0/6.0)
-                else:
-                    p2[j,i] *= 0*(np.pi/180.0)*np.sqrt(0.0365) \
-                               *(self.K/self.wavelength)*(6.0)**(5.0/6.0)
-                    
+        #  Faster way;  uses slicing and np.where rather than double for loop
+        else:       
+            FreqX,FreqY = np.meshgrid(FreqX,FreqY)
+            p2[np.where(np.sqrt(FreqX**2+FreqY**2)>=1.0/1000.0)] *= (np.pi/180.0)\
+            *(self.K/self.wavelength)*np.sqrt(0.0365)*(1000.0 \
+            *np.sqrt(FreqX[np.where(np.sqrt(FreqX**2+FreqY**2)>=1.0/1000.0)]**2 \
+            +FreqY[np.where(np.sqrt(FreqX**2+FreqY**2)>=1.0/1000.0)]**2))**(-11.0/6.0)
+            p2[np.where((np.sqrt(FreqX**2+FreqY**2)<1.0/1000.0) & \
+            (np.sqrt(FreqX**2+FreqY**2) >=1.0/6000.0)) ] *= (np.pi/180.0) \
+            *np.sqrt(0.0365)*(1000.0*np.sqrt(FreqX[np.where((np.sqrt(FreqX**2\
+            +FreqY**2)<1.0/1000.0) & (np.sqrt(FreqX**2+FreqY**2) >=1.0/6000.0))]**2\
+            + FreqY[np.where((np.sqrt(FreqX**2+FreqY**2)<1.0/1000.0) & \
+            (np.sqrt(FreqX**2+FreqY**2) >=1.0/6000.0))]**2))**(-5.0/6.0)
+            p2[np.where(np.sqrt(FreqX**2+FreqY**2) < 1.0/6000.0) ] *= 0
+        
         phases = np.fft.ifft2(p2)
-        self.phases=phases.real
+        if convolution ==True:        
+            # convolve this with tophat kernel of ALMA antenna size (12m)
+            tophat_kernel = astconv.Tophat2DKernel(12//self.cellsize)
+            self.phases= astconv.convolve(phases.real, tophat_kernel)
+        else:
+            self.phases = phases.real
         self.phasecoords_x = x
         self.phasecoords_y = y
         self.Nbaselines = Nbaselines
@@ -185,7 +208,7 @@ class Saboteur(object):
         
         
 # ---------------------------------------------------------------------------    
-    def add_phase_errors(self, v):
+    def add_phase_errors(self, v , fast = False, cellsize = 10.0 ,convolution=False):
         '''
         Create coordinate grid of rms phases, using the phase structure function.
         Assign one phase to each antenna, determined using the antenna's position
@@ -194,9 +217,12 @@ class Saboteur(object):
         which the phase screen is translated.  For simplicity, the
         translation will always be in the x-direction
         -v determines the rate at which the phase grid translates.
+        -cellsize is size of phase cells (in meters).
+        -convolution flags whether a user wants to convolve the phase screen with
+            the 12m size of ALMA antennas.
         '''
         if self.phases is None or v !=self.velocity:            
-            self.get_phases(v)
+            self.get_phases(v, fast, cellsize,convolution)
         
         
         f_interp = interpolate.RectBivariateSpline(self.phasecoords_y,self.phasecoords_x,self.phases,kx=1,ky=1)
@@ -221,12 +247,13 @@ class Saboteur(object):
 # -------------------------------------------------------------------------
     
     def add_noise(self,rms):
+        self.noise_rms = rms
         for i in range(len(self.Visibilities)):
             self.Visibilities[i]+= np.random.normal(0.0,rms)+1j*np.random.normal(0.0,rms)
         return
 # -------------------------------------------------------------------------
     
-    def sabotage_measurement_set(self):
+    def sabotage_measurement_set(self,lenstool=False):
         '''
         Write the corrupted visibilities back to the original measurement set.
         For this copy measurement set into new set 
@@ -236,47 +263,137 @@ class Saboteur(object):
         individually.  Make new directory for these with name 
         /path/measurement_sabotaged/.        
         '''        
-        
-        if len(self.Visibilities)<10**6:
-            #create location for new ms, and copy old ms to new location
-            self.path_new = self.path[:-3]+'_sabotaged.ms'
-            command = ['cp','-R', self.path+'/', self.path_new+'/']
-            subprocess.call(command)
-        
-            visibilities_new = [] #new visibilities to be passed to CASA as a list
-            for i in range(len(self.Visibilities)):
-                visibilities_new.append(self.Visibilities[i])
+        if lenstool == True:
+            '''
+            Place data in format for use with lens tool code.
+            that means uv data in wavelengths, visibilties 
+            and sigma squared inverse in single column vectors,
+            and all data saved as doubles using struct.pack
+            '''
             
-        
-            script = ['ms.open("%(path)s",nomodify=False)' % {"path": self.path_new}\
-                      ,'recD=ms.getdata(["data"])']
-            script.append('vis_new ='+str(visibilities_new))
-            script.append("recD['data'][0,0,:]=vis_new")
-            script.append("ms.putdata(recD)")
-            script.append("ms.close()")
-        
-            casa=drivecasa.Casapy()
-            output = casa.run_script(script)
-            print(output)
-        
-        else:
+            u = self.u / self.wavelength
+            v = self.v / self.wavelength
+            sigma_squared_inv = 1.0/self.noise_rms**2 *np.ones(2*len(self.Visibilities),float)
+            vis = np.empty(2*len(self.Visibilities),float)
+            vis[0::2] = self.Visibilities.real
+            vis[1::2] = self.Visibilities.imag
+            
+            # Can only do single channel data now.
+            chan = np.zeros(len(self.u),float)
+            
             self.path_new = self.path[:-3]+'_sabotaged/'
-            command = ['mkdir', self.path_new]
+            command = ['mkdir' , self.path_new]
             subprocess.call(command)
             
-            f = open(self.path_new+'Vis_real.txt', 'w')
-            for i in range(len(self.Visibilities)):
-                f.write(str(self.Visibilities[i].real))
-                f.write('\n')
+            f = open(self.path_new+'u.bin','wb')
+            data = struct.pack('d'*len(u),*u)
+            f.write(data)
             f.close()
+            g = open(self.path_new+'v.bin','wb')
+            data = struct.pack('d'*len(v),*v)
+            g.write(data)
+            g.close()
+            h = open(self.path_new+'chan.bin','wb')
+            data = struct.pack('d'*len(chan),*chan)
+            h.write(data)
+            h.close()
+            i = open(self.path_new+'vis_chan_0.bin','wb')
+            data = struct.pack('d'*len(vis),*vis)
+            i.write(data)
+            i.close()
+            j = open(self.path_new+'sigma_squared_inv.bin','wb')
+            data = struct.pack('d'*len(sigma_squared_inv),*sigma_squared_inv)
+            j.write(data)
+            j.close()
             
-            f = open(self.path_new+'Vis_imag.txt', 'w')
-            for i in range(len(self.Visibilities)):
-                f.write(str(self.Visibilities[i].imag))
-                f.write('\n')
-            f.close()
+        else:
+        
+            if len(self.Visibilities)<10**6:
+                #create location for new ms, and copy old ms to new location
+                self.path_new = self.path[:-3]+'_sabotaged.ms'
+                command = ['cp','-R', self.path+'/', self.path_new+'/']
+                subprocess.call(command)
+        
+                visibilities_new = [] #new visibilities to be passed to CASA as a list
+                for i in range(len(self.Visibilities)):
+                    visibilities_new.append(self.Visibilities[i])
+            
+        
+                script = ['ms.open("%(path)s",nomodify=False)' % {"path": self.path_new}\
+                          ,'recD=ms.getdata(["data"])']
+                script.append('vis_new ='+str(visibilities_new))
+                script.append("recD['data'][0,0,:]=vis_new")
+                script.append("ms.putdata(recD)")
+                script.append("ms.close()")
+        
+                casa=drivecasa.Casapy()
+                output = casa.run_script(script)
+                print(output)
+        
+            else:
+                self.path_new = self.path[:-3]+'_sabotaged/'
+                command = ['mkdir', self.path_new]
+                subprocess.call(command)
+            
+                f = open(self.path_new+'Vis_real.txt', 'w')
+                for i in range(len(self.Visibilities)):
+                    f.write(str(self.Visibilities[i].real))
+                    f.write('\n')
+                    f.close()
+            
+                f = open(self.path_new+'Vis_imag.txt', 'w')
+                for i in range(len(self.Visibilities)):
+                    f.write(str(self.Visibilities[i].imag))
+                    f.write('\n')
+                    f.close()
             
             
                 
         
         return
+# -------------------------------------------------------------------------
+        
+    def plot(self,mapname,Figsize=[10,10]):
+        
+        if mapname == 'structure function':
+            #first get rms phases vs distance
+            dist = []
+            rmsPhase = []            
+            for i in range(self.Nbaselines):
+                dist.append(np.sqrt((self.antennaX[self.antenna1[i]]-self.antennaX[self.antenna2[i]])**2 \
+                    +(self.antennaY[self.antenna1[i]]-self.antennaY[self.antenna2[i]])**2))
+                rmsPhase.append(np.sqrt(np.mean((self.phase_errors1[i::self.Nbaselines] \
+                    -self.phase_errors2[i::self.Nbaselines])**2))*180/np.pi)
+            
+            plt.figure(figsize=Figsize)
+            
+            xpoints = np.arange(10,20000,20.0)
+            predictions = (self.cellsize/10.0)*(1.0/((1.0/(1.0/(((1.0/(self.K/(1000*self.wavelength)*((xpoints/1000.0)**(5.0/6.0))))**(3.0) \
+                +(1.0/(self.K/(1000.0*self.wavelength)*(xpoints/1000.0)**(1.0/3.0)))**(3.0)))**(1.0/3.0)))**(3.0) \
+                +(1.0/(self.K/(1000.0*self.wavelength)*6.0**(1.0/3.0)+0*xpoints))**(3.0))**(1.0/3.0))
+            
+            plt.plot(xpoints,predictions,'b-')
+            plt.plot(dist,rmsPhase,'k.')
+            plt.plot([1000,1000],[0,400], 'r-')
+            plt.plot([(6000),(6000)],[0,400], 'r-')
+            plt.xlim(np.min(dist)-10.0,np.max(dist)+100.0)
+            plt.ylim(np.min(rmsPhase)-1,np.max(rmsPhase)+5.0)
+            plt.xscale('log')
+            plt.yscale('log')
+            plt.xlabel('baseline (m)')
+            plt.ylabel('rms phase (deg)')
+        else:
+            pass
+        # If we're in a notebook, display the plot. 
+        # Otherwise, make a PNG.
+        try:
+            __IPYTHON__
+            plt.show()
+        except NameError:
+            pngfile = mapname+'.png'
+            plt.savefig(pngfile)
+            print "Saved plot to "+pngfile
+            
+        return
+
+# -------------------------------------------------------------------------
