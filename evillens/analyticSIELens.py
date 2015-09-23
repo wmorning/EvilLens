@@ -95,6 +95,69 @@ class AnalyticSIELens(evil.GravitationalLens):
         self.alpha_y = np.sin(self.rotation)*alpha_x_prime+np.cos(self.rotation)*alpha_y_prime
                
         return
+
+# ----------------------------------------------------------------------
+
+    def add_subhalos(self, M , centroid , N ):
+        '''
+        Add N subhalos with masses M and positions given by centroid
+        to you SIE lens.  Want to determine the tidal radius based on
+        subhalo mass and main halo mass.
+        
+        For this, we want to minimize the impact on memory used in adding
+        a subhalo.  What we should thus do is remember the subhalo parameters
+        as part of the main lens, but not remember the kappa grids or 
+        alpha grids (have them be local variables)
+        '''
+        
+        
+        if self.kappa is None:
+            raise Exception('Need main lens kappa map \n')
+        if self.alpha_x is None:
+            raise Exception('Need main lens deflection angles \n')
+        assert self.alpha_x.shape == self.image_x.shape
+        assert self.alpha_y.shape == self.image_y.shape
+        assert self.alpha_x.shape == self.alpha_y.shape
+        assert self.x.shape == self.kappa.shape
+        assert self.kappa.shape == self.y.shape
+        
+        
+        self.Nsubhalos = N
+        Msub = M*units.solMass
+        # calculate tidal radius of subhalo using parameters of main halo
+        EinRad_M = 4.0*np.pi*(self.sigma/constants.c)**2* self.Dds/self.Ds
+        
+        Sigma_sub = (np.sqrt(4.0/np.pi) * constants.G * Msub *self.sigma \
+                    /(np.pi * EinRad_M * self.Dd))**(1.0/3.0)
+        Rtidal = (Sigma_sub / self.sigma / np.sqrt(4.0/np.pi)) * EinRad_M 
+        Rcore = Rtidal.decompose().value * 3600.0*180.0/np.pi
+        #create subhalo object.  Have coordinates be those of main halo.
+        
+        subhalo = evil.AnalyticPseudoJaffeLens(self.Zd,self.Zs)
+        subhalo.x = self.x
+        subhalo.y = self.y
+        subhalo.image_x = self.image_x
+        subhalo.image_y = self.image_y  
+        if N ==1:
+            subhalo.build_kappa_map(Msub.value, a = Rcore , \
+                centroid = centroid, n = 4, GAMMA = 2)
+            subhalo.deflect()
+            self.kappa += subhalo.kappa
+            self.alpha_x += subhalo.alpha_x
+            self.alpha_y += subhalo.alpha_y
+        else:
+            for i in range(N):
+                subhalo.build_kappa_map(Msub[i].value, a = Rcore[i] , \
+                    centroid = centroid[i], n = 4, GAMMA = 2)
+                subhalo.deflect()
+                self.kappa += subhalo.kappa
+                self.alpha_x += subhalo.alpha_x
+                self.alpha_y += subhalo.alpha_y
+        self.subhalo_masses = Msub.value
+        self.subhalo_Rcore = Rcore
+        self.subhalo_positions = centroid
+        
+        return
         
 # ----------------------------------------------------------------------
     def get_mass_inside(self,r):
