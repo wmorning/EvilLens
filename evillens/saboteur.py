@@ -141,7 +141,7 @@ class Saboteur(object):
         return
 # ---------------------------------------------------------------------------
         
-    def get_phases(self, v , fast=False , cellsize = 10.0 ,convolution=False):
+    def get_phases(self, v , fast=False , cellsize = 10.0 ,convolution=False,randseed=1):
         '''
         Create coordinate grid of rms phases, using the phase structure function.
         '''
@@ -158,9 +158,12 @@ class Saboteur(object):
         
         x = np.arange(minX,maxX+cellsize,cellsize)
         y = np.arange(minY,maxY+cellsize,cellsize)
-        phases = np.random.normal(0.0,1.0,(len(y),len(x)))
         
-        p2 = np.fft.fft2(phases)
+        #generate pseudo random numbers
+        np.random.seed(randseed)
+        phases = np.random.normal(0.0,1.0,(len(y),len(x))) 
+        
+        p2 = np.fft.fft2(phases) /self.cellsize
         FreqX = np.fft.fftfreq(len(x), 1.0/float(len(x)) )*2.0*np.pi/(x[-1]-x[0])
         FreqY = np.fft.fftfreq(len(y), 1.0/float(len(y))) *2.0*np.pi/(y[-1]-y[0])
         if fast==False:
@@ -175,9 +178,11 @@ class Saboteur(object):
                                 *np.sqrt(0.0365)*(1000.0*np.sqrt(FreqX[i]**2\
                                 +FreqY[j]**2))**(-5.0/6.0)
                     else:
-                        p2[j,i] *= 0*(np.pi/180.0)*np.sqrt(0.0365) \
-                                *(self.K/self.wavelength)*(6.0)**(5.0/6.0)
-        
+                        #p2[j,i] *= 0*(np.pi/180.0)*np.sqrt(0.0365) \
+                        #        *(self.K/self.wavelength)*(6.0)**(5.0/6.0)
+                        p2[j,i] *= (np.pi/180.0)*np.sqrt(0.0365) \
+                                *(self.K/self.wavelength)*(6.0)**(-5.0/6.0)
+                    
         #  Faster way;  uses slicing and np.where rather than double for loop
         else:       
             FreqX,FreqY = np.meshgrid(FreqX,FreqY)
@@ -187,11 +192,12 @@ class Saboteur(object):
             +FreqY[np.where(np.sqrt(FreqX**2+FreqY**2)>=1.0/1000.0)]**2))**(-11.0/6.0)
             p2[np.where((np.sqrt(FreqX**2+FreqY**2)<1.0/1000.0) & \
             (np.sqrt(FreqX**2+FreqY**2) >=1.0/6000.0)) ] *= (np.pi/180.0) \
-            *np.sqrt(0.0365)*(1000.0*np.sqrt(FreqX[np.where((np.sqrt(FreqX**2\
-            +FreqY**2)<1.0/1000.0) & (np.sqrt(FreqX**2+FreqY**2) >=1.0/6000.0))]**2\
+            *np.sqrt(0.0365)*(1000.0*np.sqrt(FreqX[np.where((np.sqrt(FreqX**2 \
+            +FreqY**2)<1.0/1000.0) & (np.sqrt(FreqX**2+FreqY**2) >=1.0/6000.0))]**2 \
             + FreqY[np.where((np.sqrt(FreqX**2+FreqY**2)<1.0/1000.0) & \
             (np.sqrt(FreqX**2+FreqY**2) >=1.0/6000.0))]**2))**(-5.0/6.0)
-            p2[np.where(np.sqrt(FreqX**2+FreqY**2) < 1.0/6000.0) ] *= 0
+            p2[np.where(np.sqrt(FreqX**2+FreqY**2) < 1.0/6000.0) ] *= (np.pi/180.0)\
+            *np.sqrt(0.0365)*(self.K/self.wavelength)*(6.0)**(-5.0/6.0) 
         
         phases = np.fft.ifft2(p2)
         if convolution ==True:        
@@ -208,7 +214,7 @@ class Saboteur(object):
         
         
 # ---------------------------------------------------------------------------    
-    def add_phase_errors(self, v , fast = False, cellsize = 10.0 ,convolution=False):
+    def add_phase_errors(self, v , fast = False, cellsize = 10.0 ,convolution=False, randseed = 1):
         '''
         Create coordinate grid of rms phases, using the phase structure function.
         Assign one phase to each antenna, determined using the antenna's position
@@ -220,9 +226,11 @@ class Saboteur(object):
         -cellsize is size of phase cells (in meters).
         -convolution flags whether a user wants to convolve the phase screen with
             the 12m size of ALMA antennas.
+        -randseed allows the user to specify the input random number seed in order
+            to control the phase errors.  Used mostly for testing purposes.
         '''
         if self.phases is None or v !=self.velocity:            
-            self.get_phases(v, fast, cellsize,convolution)
+            self.get_phases(v, fast, cellsize,convolution,randseed)
         
         
         f_interp = interpolate.RectBivariateSpline(self.phasecoords_y,self.phasecoords_x,self.phases,kx=1,ky=1)
@@ -365,19 +373,22 @@ class Saboteur(object):
                 rmsPhase.append(np.sqrt(np.mean((self.phase_errors1[i::self.Nbaselines] \
                     -self.phase_errors2[i::self.Nbaselines])**2))*180/np.pi)
             
+            self.dist = dist
+            self.rmsPhase = rmsPhase            
+            
             plt.figure(figsize=Figsize)
             
             xpoints = np.arange(10,20000,20.0)
-            predictions = (self.cellsize/10.0)*(1.0/((1.0/(1.0/(((1.0/(self.K/(1000*self.wavelength)*((xpoints/1000.0)**(5.0/6.0))))**(3.0) \
-                +(1.0/(self.K/(1000.0*self.wavelength)*(xpoints/1000.0)**(1.0/3.0)))**(3.0)))**(1.0/3.0)))**(3.0) \
-                +(1.0/(self.K/(1000.0*self.wavelength)*6.0**(1.0/3.0)+0*xpoints))**(3.0))**(1.0/3.0))
+            predictions = 1.0/(4.0*np.pi)*(1.0/((1.0/(1.0/(((1.0/(self.K/(1000*self.wavelength)*((xpoints/1000.0)**(5.0/6.0))))**(40.0) \
+                +(1.0/(self.K/(1000.0*self.wavelength)*(xpoints/1000.0)**(1.0/3.0)))**(40.0)))**(1.0/40.0)))**(40.0) \
+                +(1.0/(self.K/(1000.0*self.wavelength)*6.0**(1.0/3.0)+0*xpoints))**(40.0))**(1.0/40.0))
             
             plt.plot(xpoints,predictions,'b-')
             plt.plot(dist,rmsPhase,'k.')
             plt.plot([1000,1000],[0,400], 'r-')
             plt.plot([(6000),(6000)],[0,400], 'r-')
             plt.xlim(np.min(dist)-10.0,np.max(dist)+100.0)
-            plt.ylim(np.min(rmsPhase)-1,np.max(rmsPhase)+5.0)
+            plt.ylim(np.min(rmsPhase)/1.1,np.max(rmsPhase)+5.0)
             plt.xscale('log')
             plt.yscale('log')
             plt.xlabel('baseline (m)')
