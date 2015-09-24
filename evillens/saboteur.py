@@ -26,7 +26,7 @@ class Saboteur(object):
     An object class which sabotages Visibilities data
     '''
 
-    def __init__(self, K, wavelength):
+    def __init__(self, K, wavelength, integration_time):
         
         self.path = None
         self.Visibilities = None
@@ -40,6 +40,7 @@ class Saboteur(object):
         
         self.K = K
         self.wavelength = wavelength
+        self.integration_time = integration_time
         
         self.antennaX = None
         self.antennaY = None
@@ -98,27 +99,57 @@ class Saboteur(object):
         
         self.antennaX -= (np.max(self.antennaX)+np.min(self.antennaX))/2.0
         self.antennaY -= (np.max(self.antennaY)+np.min(self.antennaY))/2.0
+    
+        self.get_Nbaselines()
+# ---------------------------------------------------------------------------    
+    def get_Nbaselines(self):
+        
+        if self.antennaX == None or self.antennaY == None:
+            raise Exception("You need to get an antenna configuration \n")
+        self.Nbaselines = (len(self.antennaX)*(len(self.antennaX)-1))/2
         
 # ---------------------------------------------------------------------------        
 
-    def add_decoherence(self):
+    def add_decoherence(self , bintime = 5.0, phases = True, cellsize = 10.0, \
+                        velocity = 10.0 , randseed = 1 , oversample = False , \
+                        oversample_tstep = 0.1):
         '''
-        Add decoherence to visibilities.  Use baseline to determine rms phase 
-        error and scale the visibilities using equation 4 in Carilli and 
-        Holdaway.
-        '''
-#        b = np.sqrt(self.u**2+self.v**2)
+        Add decoherence to visibilities.  We do this by creating a high resolution
+        phase screen, and sampling the phase at each antenna for small time steps.
+        the resulting phase is averaged over segments that are "bintime" long.
+        should approximately cause a reduction in amplitude of 
+        exp( - 0.5* phi_rms ^ 2 ) to the signal.  The phases flag tells the
+        function if we retain just the amplitude reduction, or if we include
+        the mean phase shift as a phase error.
         
-        for i in range(len(self.Visibilities)):
-            b = np.sqrt((self.antennaX[self.antenna1[i]]-self.antennaX[self.antenna2[i]])**2 \
-                +(self.antennaY[self.antenna1[i]]-self.antennaY[self.antenna2[i]])**2)
+        This function automatically bins the visibilities.  For small datasets,
+        where no binning is required this function samples the phase at a faster
+        rate than the input integration time to provide an accurate magnitude
+        of the decoherence.
+        
+        - bintime is given in seconds.  It cannot be less than the integration
+        time
+        - cellsize is size of cells in phase screen
+        - velocity is velocity of phase screen in m/s
+        '''
+        
+        assert  bintime >= self.integration_time 
+        
+        if oversample == False:
+            v = velocity/self.integration_time
+            self.get_phases(v,fast=False,cellsize=cellsize,convolution=True,randseed=randseed)
             
-            if b <= self.W:
-                self.Visibilities[i] *= np.exp(-((self.K/(1000.0*self.wavelength))*(b/1000.0)**(5.0/6.0)*(np.pi/180.0))**2/2)
-            elif b >self.W and b <= self.L0:
-                self.Visibilities[i] *= np.exp(-((self.K/(1000.0*self.wavelength))*(b/1000.0)**(1.0/3.0)*(np.pi/180.0))**2/2)
-            else:
-                self.Visibilities[i] *= np.exp(-((self.K/(1000.0*self.wavelength))*(np.pi/180.0)*(6.0**(1.0/3.0)))**2/2)
+        
+#        for i in range(len(self.Visibilities)):
+#            b = np.sqrt((self.antennaX[self.antenna1[i]]-self.antennaX[self.antenna2[i]])**2 \
+#                +(self.antennaY[self.antenna1[i]]-self.antennaY[self.antenna2[i]])**2)
+#            
+#            if b <= self.W:
+#                self.Visibilities[i] *= np.exp(-((self.K/(1000.0*self.wavelength))*(b/1000.0)**(5.0/6.0)*(np.pi/180.0))**2/2)
+#            elif b >self.W and b <= self.L0:
+#                self.Visibilities[i] *= np.exp(-((self.K/(1000.0*self.wavelength))*(b/1000.0)**(1.0/3.0)*(np.pi/180.0))**2/2)
+#            else:
+#                self.Visibilities[i] *= np.exp(-((self.K/(1000.0*self.wavelength))*(np.pi/180.0)*(6.0**(1.0/3.0)))**2/2)
             
         return
 
@@ -211,7 +242,25 @@ class Saboteur(object):
         self.Nbaselines = Nbaselines
         self.Ntsteps = Ntsteps
         
+# ---------------------------------------------------------------------------
         
+    def assign_phases_to_antennas(self , v , fast = False , cellsize = 10.0 , \
+                                    convolution = False , randseed = 1 ):
+        if self.phases is None or v != self.velocity:                                
+            self.get_phases(v,fast,cellsize,convolution,randseed)
+        
+        f_interp = interpolate.RectBivariateSpline(self.phasecoords_y,self.phasecoords_x,self.phases,kx=1,ky=1)
+        
+        self.phase_errors1 = np.zeros(len(self.Visibilities),float)
+        self.phase_errors2 = np.zeros(len(self.Visibilities),float)
+        for i in range(len(self.phase_errors1)):
+            self.phase_errors1[i] = f_interp(self.antennaY[self.antenna1[i]],self.antennaX[self.antenna1[i]]+self.velocity*(i//self.Nbaselines))
+            self.phase_errors2[i] = f_interp(self.antennaY[self.antenna2[i]],self.antennaX[self.antenna2[i]]+self.velocity*(i//self.Nbaselines))
+        
+        self.antennaphases = np.zeros([len(self.antennaX),self.Ntsteps], float)
+        for i in range(self.Ntsteps):
+            for j in range(len(self.antennaX)):
+                self.antennaphases[j,i] = f_interp(self.antennaY[j],self.antennaX[j]+self.velocity*i)        
         
 # ---------------------------------------------------------------------------    
     def add_phase_errors(self, v , fast = False, cellsize = 10.0 ,convolution=False, randseed = 1):
@@ -229,33 +278,67 @@ class Saboteur(object):
         -randseed allows the user to specify the input random number seed in order
             to control the phase errors.  Used mostly for testing purposes.
         '''
-        if self.phases is None or v !=self.velocity:            
-            self.get_phases(v, fast, cellsize,convolution,randseed)
+#        if self.phases is None or v !=self.velocity:            
+#            self.get_phases(v, fast, cellsize,convolution,randseed)
+#        
+#        
+#        f_interp = interpolate.RectBivariateSpline(self.phasecoords_y,self.phasecoords_x,self.phases,kx=1,ky=1)
+#        
+#        self.phase_errors1 = np.zeros(len(self.Visibilities),float)
+#        self.phase_errors2 = np.zeros(len(self.Visibilities),float)
+#        for i in range(len(self.phase_errors1)):
+#            self.phase_errors1[i] = f_interp(self.antennaY[self.antenna1[i]],self.antennaX[self.antenna1[i]]+self.velocity*(i//self.Nbaselines))
+#            self.phase_errors2[i] = f_interp(self.antennaY[self.antenna2[i]],self.antennaX[self.antenna2[i]]+self.velocity*(i//self.Nbaselines))
+#        
+#        self.antennaphases = np.zeros([len(self.antennaX),self.Ntsteps], float)
+#        for i in range(self.Ntsteps):
+#            for j in range(len(self.antennaX)):
+#                self.antennaphases[j,i] = f_interp(self.antennaY[j],self.antennaX[j]+self.velocity*i)
         
-        
-        f_interp = interpolate.RectBivariateSpline(self.phasecoords_y,self.phasecoords_x,self.phases,kx=1,ky=1)
-        
-        self.phase_errors1 = np.zeros(len(self.Visibilities),float)
-        self.phase_errors2 = np.zeros(len(self.Visibilities),float)
-        for i in range(len(self.phase_errors1)):
-            self.phase_errors1[i] = f_interp(self.antennaY[self.antenna1[i]],self.antennaX[self.antenna1[i]]+self.velocity*(i//self.Nbaselines))
-            self.phase_errors2[i] = f_interp(self.antennaY[self.antenna2[i]],self.antennaX[self.antenna2[i]]+self.velocity*(i//self.Nbaselines))
-        
-        self.antennaphases = np.zeros([len(self.antennaX),self.Ntsteps], float)
-        for i in range(self.Ntsteps):
-            for j in range(len(self.antennaX)):
-                self.antennaphases[j,i] = f_interp(self.antennaY[j],self.antennaX[j]+self.velocity*i)
-        
-        
+        self.assign_phases_to_antennas( v, fast, cellsize, convolution, randseed)
         
         self.Visibilities *= np.exp(1j*(self.phase_errors1-self.phase_errors2))   
         
         return
+
+# -------------------------------------------------------------------------
+
+    def bin_visibilities(self , bintime = 5.0):
+        '''
+        Bin the visibilities in time intervals of bintime.  If phase errors
+        are added, then this will cause decorrelation of the visibilities.
+        '''
+        Nsteps = int(bintime // self.integration_time)
+        
+        #create array for new storage of visibilities
+        Visibilities_new = np.zeros(len(self.Visibilities)/Nsteps, complex)
+        Unew = np.zeros(len(self.U)/Nsteps,float)
+        Vnew = np.zeros(len(self.V)/Nsteps,float)       
+        
+        self.Visibilities = self.Visibilities.reshape([len(self.Visibilities)/self.Nbaselines,self.Nbaselines])
+        self.U = self.U.reshape([len(self.U)/self.Nbaselines,self.Nbaselines])
+        self.V = self.V.reshape([len(self.V)/self.Nbaselines,self.Nbaselines])        
+        
+        for i in range(self.Visibilities.shape[0]/Nsteps):
+            if i < self.Visibilities.shape[0]/Nsteps-1 :
+                Visibilities_new[self.Nbaselines*i:self.Nbaselines*(i+1)] = np.mean(self.Visibilities[Nsteps*i:Nsteps*(i+1),:],axis=0)
+                Unew[self.Nbaselines*i:self.Nbaselines*(i+1)] = np.mean(self.U[Nsteps*i:Nsteps*(i+1),:],axis=0)
+                Vnew[self.Nbaselines*i:self.Nbaselines*(i+1)] = np.mean(self.V[Nsteps*i:Nsteps*(i+1),:],axis=0)
+            else:
+                Visibilities_new[self.Nbaselines*i:self.Nbaselines*(i+1)] = np.mean(self.Visibilities[Nsteps*i::,:],axis=0)
+                Unew[self.Nbaselines*i:self.Nbaselines*(i+1)] = np.mean(self.U[Nsteps*i::,:],axis=0)
+                Vnew[self.Nbaselines*i:self.Nbaselines*(i+1)] = np.mean(self.V[Nsteps*i::,:],axis=0)
+        
+        self.Visibilities = Visibilities_new
+        self.U = Unew
+        self.V = Vnew
+        self.integration_time = bintime
         
 # -------------------------------------------------------------------------
     
-    def add_noise(self,rms):
+    def add_noise(self,rms,seed=1):
         self.noise_rms = rms
+        np.random.seed(seed)
         for i in range(len(self.Visibilities)):
             self.Visibilities[i]+= np.random.normal(0.0,rms)+1j*np.random.normal(0.0,rms)
         return
