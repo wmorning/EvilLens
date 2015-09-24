@@ -205,7 +205,7 @@ class Saboteur(object):
             tophat_kernel = astconv.Tophat2DKernel(12//self.cellsize)
             self.phases= astconv.convolve(phases.real, tophat_kernel)
         else:
-            self.phases = phases.real
+            self.phases = 4.0*np.pi*phases.real
         self.phasecoords_x = x
         self.phasecoords_y = y
         self.Nbaselines = Nbaselines
@@ -379,7 +379,7 @@ class Saboteur(object):
             plt.figure(figsize=Figsize)
             
             xpoints = np.arange(10,20000,20.0)
-            predictions = 1.0/(4.0*np.pi)*(1.0/((1.0/(1.0/(((1.0/(self.K/(1000*self.wavelength)*((xpoints/1000.0)**(5.0/6.0))))**(40.0) \
+            predictions = (1.0/((1.0/(1.0/(((1.0/(self.K/(1000*self.wavelength)*((xpoints/1000.0)**(5.0/6.0))))**(40.0) \
                 +(1.0/(self.K/(1000.0*self.wavelength)*(xpoints/1000.0)**(1.0/3.0)))**(40.0)))**(1.0/40.0)))**(40.0) \
                 +(1.0/(self.K/(1000.0*self.wavelength)*6.0**(1.0/3.0)+0*xpoints))**(40.0))**(1.0/40.0))
             
