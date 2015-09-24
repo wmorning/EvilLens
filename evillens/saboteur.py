@@ -132,7 +132,7 @@ class Saboteur(object):
         - cellsize is size of cells in phase screen
         - velocity is velocity of phase screen in m/s
         '''
-        
+        raise Exception("can't add decoherence just yet! \n")
         assert  bintime >= self.integration_time 
         
         if oversample == False:
