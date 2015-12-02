@@ -101,12 +101,27 @@ class Saboteur(object):
         self.antennaY -= (np.max(self.antennaY)+np.min(self.antennaY))/2.0
     
         self.get_Nbaselines()
+        self.get_Ntsteps()
 # ---------------------------------------------------------------------------    
     def get_Nbaselines(self):
         
-        if self.antennaX == None or self.antennaY == None:
+        if hasattr(self, 'antennaX') is False:
             raise Exception("You need to get an antenna configuration \n")
         self.Nbaselines = (len(self.antennaX)*(len(self.antennaX)-1))/2
+        self.Nantennas = len(self.antennaX)
+        
+# ---------------------------------------------------------------------------
+    def get_Ntsteps(self):
+        if hasattr(self, 'antennaX') is False:
+            raise Exception("You need to load an antenna configuration \n")
+        if hasattr(self, 'Visibilities') is False:
+            raise Exception("You need to load visibilities \n")
+        if hasattr(self, "Nbaselines") is False:
+            self.get_Nbaselines()
+        self.Ntsteps = len(self.Visibilities)//self.Nbaselines
+        
+        if len(self.Visibilities) % self.Nbaselines != 0:
+            print('WARNING: shape mismatch between visibilities and baselines')
         
 # ---------------------------------------------------------------------------        
 
@@ -128,18 +143,55 @@ class Saboteur(object):
         of the decoherence.
         
         - bintime is given in seconds.  It cannot be less than the integration
-        time
+        time, and it must return an integer when divided into the total time and 
+        by the integration time.  ---> bug fixes later
         - cellsize is size of cells in phase screen
         - velocity is velocity of phase screen in m/s
+        - if phases is False, we assume that phase calibration on the binning
+        timescale is perfect, and so we only observe an amplitude reduction
+        due to decoherence.  If its True, the phases are added before binning
         '''
-        raise Exception("can't add decoherence just yet! \n")
+        #raise Exception("can't add decoherence just yet! \n")
         assert  bintime >= self.integration_time 
         
-        if oversample == False:
-            v = velocity/self.integration_time
-            self.get_phases(v,fast=False,cellsize=cellsize,convolution=True,randseed=randseed)
+        if cellsize <12.0:
+            convolution = True
+        else:
+            convolution = False
             
-        
+        if oversample == False:
+            v = velocity*self.integration_time
+            self.assign_phases_to_antennas(v=v,fast=False,cellsize=cellsize,convolution=convolution,randseed=randseed)
+            
+            if phases == False:
+                self.bin_visibilities(bintime)
+                
+                # calculate the phase errors, and reshape their grid so that we  
+                # can average along one axis.
+                phaseErrs = (self.phase_errors1-self.phase_errors2 \
+                ).reshape([len(self.phase_errors1)/self.Nbaselines/self.Nsteps_binning,  \
+                self.Nsteps_binning , self.Nbaselines])
+                
+                # now calculate the coherence by averaging exp( 1j * phi)
+                # and subtract the overall phase error by dividing
+                # by exp( 1j * phi_mean ) .
+                coherence = (np.mean(np.exp(1j*phaseErrs),axis=1) \
+                            / np.exp(1j*np.mean(phaseErrs,axis=1))).reshape( \
+                            self.Ntsteps*self.Nbaselines/self.Nsteps_binning)
+                
+                self.Visibilities *= coherence
+            
+            else:
+                
+                # add phase errors, and then bin them.  Decoherence comes 
+                # in naturally this way
+                self.Visibilities *= np.exp(1j*(self.phase_errors1-self.phase_errors2))
+                self.bin_visibilities(bintime)
+        else:
+            raise Exception("can't do oversampled phase grid yet \n")
+                
+
+                
 #        for i in range(len(self.Visibilities)):
 #            b = np.sqrt((self.antennaX[self.antenna1[i]]-self.antennaX[self.antenna2[i]])**2 \
 #                +(self.antennaY[self.antenna1[i]]-self.antennaY[self.antenna2[i]])**2)
@@ -234,7 +286,7 @@ class Saboteur(object):
         if convolution ==True:        
             # convolve this with tophat kernel of ALMA antenna size (12m)
             tophat_kernel = astconv.Tophat2DKernel(12//self.cellsize)
-            self.phases= astconv.convolve(phases.real, tophat_kernel)
+            self.phases= astconv.convolve(4.0*np.pi*phases.real, tophat_kernel, boundary='wrap',normalize_kernel=True)
         else:
             self.phases = 4.0*np.pi*phases.real
         self.phasecoords_x = x
@@ -307,41 +359,128 @@ class Saboteur(object):
         '''
         Bin the visibilities in time intervals of bintime.  If phase errors
         are added, then this will cause decorrelation of the visibilities.
+        
+        For now, we require that the binning time divides evenly into the
+        total time, and that the integration time divides evenly into the
+        binning time
         '''
-        Nsteps = int(bintime // self.integration_time)
+        #Nsteps must be an integer.
+        if self.integration_time < 1:
+            bintime_ms = int(bintime*1000)
+            integration_ms = int(self.integration_time*1000)
+            Nsteps = bintime_ms // integration_ms
+            assert bintime_ms % integration_ms == 0
+            assert self.Ntsteps % Nsteps == 0
+        else:
+            Nsteps = int(bintime // self.integration_time)
+            assert(abs(int(bintime) % int(self.integration_time))/float(self.integration_time) < 10**-4)        
+            assert self.Ntsteps % Nsteps == 0
         
-        #create array for new storage of visibilities
-        Visibilities_new = np.zeros(len(self.Visibilities)/Nsteps, complex)
-        Unew = np.zeros(len(self.U)/Nsteps,float)
-        Vnew = np.zeros(len(self.V)/Nsteps,float)       
-        
-        self.Visibilities = self.Visibilities.reshape([len(self.Visibilities)/self.Nbaselines,self.Nbaselines])
-        self.U = self.U.reshape([len(self.U)/self.Nbaselines,self.Nbaselines])
-        self.V = self.V.reshape([len(self.V)/self.Nbaselines,self.Nbaselines])        
-        
-        for i in range(self.Visibilities.shape[0]/Nsteps):
-            if i < self.Visibilities.shape[0]/Nsteps-1 :
-                Visibilities_new[self.Nbaselines*i:self.Nbaselines*(i+1)] = np.mean(self.Visibilities[Nsteps*i:Nsteps*(i+1),:],axis=0)
-                Unew[self.Nbaselines*i:self.Nbaselines*(i+1)] = np.mean(self.U[Nsteps*i:Nsteps*(i+1),:],axis=0)
-                Vnew[self.Nbaselines*i:self.Nbaselines*(i+1)] = np.mean(self.V[Nsteps*i:Nsteps*(i+1),:],axis=0)
-            else:
-                Visibilities_new[self.Nbaselines*i:self.Nbaselines*(i+1)] = np.mean(self.Visibilities[Nsteps*i::,:],axis=0)
-                Unew[self.Nbaselines*i:self.Nbaselines*(i+1)] = np.mean(self.U[Nsteps*i::,:],axis=0)
-                Vnew[self.Nbaselines*i:self.Nbaselines*(i+1)] = np.mean(self.V[Nsteps*i::,:],axis=0)
-        
-        self.Visibilities = Visibilities_new
-        self.U = Unew
-        self.V = Vnew
+        # reshape data to prepare for averaging
+        self.Visibilities = self.Visibilities.reshape([len(self.Visibilities)/self.Nbaselines/Nsteps,Nsteps,self.Nbaselines])
+        self.u = self.u.reshape([len(self.u)/self.Nbaselines/Nsteps,Nsteps,self.Nbaselines])
+        self.v = self.v.reshape([len(self.v)/self.Nbaselines/Nsteps,Nsteps,self.Nbaselines])
+        self.antenna1 = self.antenna1.reshape([len(self.antenna1)/self.Nbaselines/Nsteps,Nsteps,self.Nbaselines])        
+        self.antenna2 = self.antenna2.reshape([len(self.antenna2)/self.Nbaselines/Nsteps,Nsteps,self.Nbaselines])        
+                
+        # average u,v,visibilities along the first axis, and return to original
+        # shape
+        self.Visibilities = np.mean(self.Visibilities,axis=1).reshape(self.Nbaselines*self.Ntsteps/Nsteps)
+        self.u = np.mean(self.u,axis=1).reshape(self.Nbaselines*self.Ntsteps/Nsteps)
+        self.v = np.mean(self.v,axis=1).reshape(self.Nbaselines*self.Ntsteps/Nsteps)
+        self.antenna1 = self.antenna1[:,0,:].reshape(self.Nbaselines*self.Ntsteps/Nsteps)
+        self.antenna2 = self.antenna2[:,0,:].reshape(self.Nbaselines*self.Ntsteps/Nsteps)
+
+        # set new integration time
         self.integration_time = bintime
-        
+        self.Nsteps_binning = Nsteps
 # -------------------------------------------------------------------------
     
     def add_noise(self,rms,seed=1):
         self.noise_rms = rms
         np.random.seed(seed)
-        for i in range(len(self.Visibilities)):
-            self.Visibilities[i]+= np.random.normal(0.0,rms)+1j*np.random.normal(0.0,rms)
+        
+        self.noise = np.random.normal(0.0,rms,len(self.Visibilities))+1j*np.random.normal(0.0,rms,len(self.Visibilities))
+        self.Visibilities += self.noise
+
+#        for i in range(len(self.Visibilities)):
+#            self.Visibilities[i]+= np.random.normal(0.0,rms)+1j*np.random.normal(0.0,rms)
         return
+
+# -------------------------------------------------------------------------
+
+    def write_phase_matrices(self,datadir,Numphaseintervals):
+        '''
+        Create matrix files Rowisone.bin, Colisone.bin, Rowisminusone.bin
+        and Colisminusone.bin which contain index labels for the +1 and -1 
+        values in the dtheta/dphi matrix.  Assumes that the phase matrix
+        is a Nvisibilities by Numphaseintervals matrix, and that the 
+        visibilities are listed in the standard CASA simobserve format.
+            
+        Right now it breaks the observation into approximately equal length
+        chunks (the last one may be slightly shorter).  In the future, we 
+        could upgrade by specifying the intervals where the phase is expected
+        to change.
+    
+        We'll also specify that the phase of the zeroth antenna is our 
+        reference phase (so we set it to 0).
+        '''
+    
+        # Total number of integrations may have changed due to binning.
+        Nintegrations = len(self.Visibilities) // self.Nbaselines
+        assert Nintegrations >= Numphaseintervals
+        IntperInterval = Nintegrations // Numphaseintervals
+        # in case of uneven division, add an additional integration to each 
+        # interval (last one becomes shorter)        
+        if Nintegrations % Numphaseintervals != 0:
+            IntperInterval +=1 
+        
+        # number of visibility points in each phase interval
+        ObsperInterval = IntperInterval * self.Nbaselines
+        
+    
+        rowisone = np.zeros(len(self.Visibilities))
+        colisone = np.zeros(len(self.Visibilities))
+        rowisminusone = np.zeros(len(self.Visibilities))
+        colisminusone = np.zeros(len(self.Visibilities))
+    
+        for i in range(len(rowisone)):
+            if self.antenna1[i] ==0: #exclude antenna 0
+                rowisminusone[i] = i
+                colisminusone[i] = self.antenna2[i]-1+(i//ObsperInterval)*(self.Nantennas-1)
+            else:
+                rowisone[i] = i
+                colisone[i] = self.antenna1[i]-1 +(i//ObsperInterval)*(self.Nantennas-1)
+                rowisminusone[i] = i
+                colisminusone[i] = self.antenna2[i]-1+(i//ObsperInterval)*(self.Nantennas-1)
+        
+        # clip where antenna1 is present from this list
+        colisone = colisone[(rowisone !=0)]
+        rowisone = rowisone[(rowisone !=0)]
+        
+        # have the matrices we want, now write to data.
+        f = open(str(datadir)+'ROWisone.bin','wb')
+        data = struct.pack('i'*len(rowisone),*rowisone)
+        f.write(data)
+        f.close()
+        
+        g = open(str(datadir)+'COLisone.bin','wb')
+        data = struct.pack('i'*len(colisone),*colisone)
+        g.write(data)
+        g.close()
+        
+        h = open(str(datadir)+'ROWisminusone.bin','wb')
+        data = struct.pack('i'*len(rowisminusone),*rowisminusone)
+        h.write(data)
+        h.close()
+        
+        i = open(str(datadir)+'COLisminusone.bin','wb')
+        data = struct.pack('i'*len(colisminusone),*colisminusone)
+        i.write(data)
+        i.close()
+    
+        return
+    
 # -------------------------------------------------------------------------
     
     def sabotage_measurement_set(self,lenstool=False):
@@ -456,8 +595,8 @@ class Saboteur(object):
                 rmsPhase.append(np.sqrt(np.mean((self.phase_errors1[i::self.Nbaselines] \
                     -self.phase_errors2[i::self.Nbaselines])**2))*180/np.pi)
             
-            self.dist = dist
-            self.rmsPhase = rmsPhase            
+            self.dist = np.array(dist)
+            self.rmsPhase = np.array(rmsPhase )           
             
             plt.figure(figsize=Figsize)
             
