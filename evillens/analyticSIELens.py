@@ -36,7 +36,7 @@ class AnalyticSIELens(evil.GravitationalLens):
         - sigma is central stellar velocity dispersion in km/s
         - q3 is axis ratio of oblate ellipsoid
         - centroid is x,y coordinates of center
-        - r_c is core radius
+        - r_c is core radius, in arcseconds
         - inclination is the inclination relative to the lens plane
         - rotation is the angle between the semi-major axis and the x-axis 
         '''
@@ -64,7 +64,19 @@ class AnalyticSIELens(evil.GravitationalLens):
         #self.kappa = self.b.value /(2.0*np.sqrt(self.q**2*((self.x-self.centroid[0])**2+self.r_c**2)+(self.y-self.centroid[1])**2))
         
         #compute kappa in rotated frame.        
-        self.kappa = self.b.value /(2.0*np.sqrt(self.q**2*((xprime)**2+self.r_c**2)+(yprime)**2))
+        #self.kappa = self.b.value /(2.0*np.sqrt(self.q**2*((xprime)**2+self.r_c**2)+(yprime)**2))
+        
+        
+        #compute kappa in rotated frome using equation from Koorman, Scheinder
+        # & Bartelmann 1994
+#       1.   convert xprime,yprime to radians, and get r,theta
+        xprime *=np.pi/3600.0/180.0
+        yprime *=np.pi/3600.0/180.0
+        r = np.sqrt(xprime**2+self.q**2*yprime**2)/b.decompose().value
+        bc = self.r_c/3600.0/180.0*np.pi/b.decompose().value
+        self.kappa = np.sqrt(self.q)/(2.0*np.sqrt(r**2+bc**2))
+        
+#       2.           
         
         return
          
@@ -88,12 +100,22 @@ class AnalyticSIELens(evil.GravitationalLens):
         #self.alpha_x = (self.b.value/np.sqrt(1-self.q**2)) * np.arctan((self.image_x-self.centroid[0])*np.sqrt(1-self.q**2)/(np.sqrt(self.q**2*((self.image_x-self.centroid[0])**2+self.r_c**2)+(self.image_y-self.centroid[1])**2)+self.r_c))        
         #self.alpha_y = (self.b.value/np.sqrt(1-self.q**2)) * np.arctanh((self.image_y-self.centroid[1])*np.sqrt(1-self.q**2)/(np.sqrt(self.q**2*((self.image_x-self.centroid[0])**2+self.r_c**2)+(self.image_y-self.centroid[1])**2)+self.q**2*self.r_c))
         
+        
+        
         #Deflect analytically for rotated SIE.  Then rotate back to original coordinate bases.
-        alpha_x_prime = (self.b.value/np.sqrt(1-self.q**2)) * np.arctan((xprime)*np.sqrt(1-self.q**2)/(np.sqrt(self.q**2*((xprime)**2+self.r_c**2)+(yprime)**2)+self.r_c))        
-        alpha_y_prime = (self.b.value/np.sqrt(1-self.q**2)) * np.arctanh((yprime)*np.sqrt(1-self.q**2)/(np.sqrt(self.q**2*((xprime)**2+self.r_c**2)+(yprime)**2)+self.q**2*self.r_c))
+
+        #Do this using eq 27a from Koorman, Schneider, & Bartelmann
+        phi = np.arctan2(yprime,xprime)
+        self.phi = phi
+        qprime = np.sqrt(1-self.q**2 )     
+        alpha_x_prime = self.b.value*(np.sqrt(self.q)/qprime)*(np.arcsinh(np.cos(phi)*qprime/self.q))
+        alpha_y_prime = self.b.value*(np.sqrt(self.q)/qprime)*np.arcsin(qprime*np.sin(phi))
+
         self.alpha_x = np.cos(self.rotation)*alpha_x_prime-np.sin(self.rotation)*alpha_y_prime
         self.alpha_y = np.sin(self.rotation)*alpha_x_prime+np.cos(self.rotation)*alpha_y_prime
-               
+         
+        self.alpha_x_prime = alpha_x_prime
+        self.alpha_y_prime = alpha_y_prime
         return
 
 # ----------------------------------------------------------------------
@@ -165,7 +187,7 @@ class AnalyticSIELens(evil.GravitationalLens):
         Returns mass inside a given radius r, where r is in kpc
         '''
         r = r*units.kpc
-        mass = (np.pi*self.sigma**2/constants.G*10.0*units.kpc).to(units.solMass)/np.sqrt(self.q)
+        mass = (np.pi*self.sigma**2/constants.G*10.0*units.kpc).to(units.solMass)
         
         return mass
 
