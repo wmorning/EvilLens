@@ -187,7 +187,7 @@ class AnalyticSIELens(evil.GravitationalLens):
         Returns mass inside a given radius r, where r is in kpc
         '''
         r = r*units.kpc
-        mass = (np.pi*self.sigma**2/constants.G*10.0*units.kpc).to(units.solMass)
+        mass = (np.pi*self.sigma**2/constants.G*r).to(units.solMass)
         
         return mass
 
