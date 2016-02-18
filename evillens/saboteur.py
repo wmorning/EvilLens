@@ -49,19 +49,23 @@ class Saboteur(object):
     
 # ---------------------------------------------------------------------------
     
-    def read_data_from(self, MeasurementSet, antennaconfig):
+    def read_data_from(self, MeasurementSet, antennaconfig,Blueberry=False):
         '''
         Reads data from a measurement set, and stores visibilties, 
         uv coordinates, and the corresponding antennas.  Also loads in
         position coordinates of antennas from antennaconfig argument.  Should
         be same as the antennaconfig as listed in the measurement set name 
         in order for phase errors to be correct.
+        - MeasurementSet is the directory of the data (either *.ms or */)
+        - Setting Blueberry flag to True reads binary files written in Blueberry
+          format.
         '''
-        casa=drivecasa.Casapy()
+        if Blueberry is False:
+            casa=drivecasa.Casapy()
         
-        self.path = str(MeasurementSet)        
+            self.path = str(MeasurementSet)        
         
-        script = ['ms.open("%(path)s",nomodify=False)' % {"path": self.path}\
+            script = ['ms.open("%(path)s",nomodify=False)' % {"path": self.path}\
                   , 'recD=ms.getdata(["data"])', 'aD=recD["data"]', 'UVW=ms.getdata(["UVW"])', 'uvpoints=UVW["uvw"]'\
                   ,'u=uvpoints[0]', 'v=uvpoints[1]'\
                   , 'antD1=ms.getdata(["antenna1"])'\
@@ -74,17 +78,92 @@ class Saboteur(object):
                   ,'print([" "+str(antD1[i])+" " for i in range(len(antD1))])'\
                   ,'print([" "+str(antD2[i])+" " for i in range(len(antD2))])']
         
-        data = casa.run_script(script)
+            data = casa.run_script(script)
               
         
-        self.v = np.array((data[0][25].split())[1::3],float)
-        self.u = np.array((data[0][28].split())[1::3],float)
-        self.Visibilities = np.array(np.array((data[0][31].split())[1::3]),complex)
-        self.antenna1 = np.array((data[0][34].split())[1::3],int)
-        self.antenna2 = np.array((data[0][37].split())[1::3],int)
+            self.v = np.array((data[0][25].split())[1::3],float)
+            self.u = np.array((data[0][28].split())[1::3],float)
+            self.Visibilities = np.array(np.array((data[0][31].split())[1::3]),complex)
+            self.antenna1 = np.array((data[0][34].split())[1::3],int)
+            self.antenna2 = np.array((data[0][37].split())[1::3],int)
+            
+        else:
+            with open(MeasurementSet+'v.bin', mode='rb') as file:
+                fileContent = file.read()
+                self.v = np.array(struct.unpack("d"*(len(fileContent)//8),fileContent))
+            file.close()
+            
+            with open(MeasurementSet+'u.bin', mode='rb') as file:
+                fileContent = file.read()
+                self.u = np.array(struct.unpack("d"*(len(fileContent)//8),fileContent))
+            file.close()
+            
+            with open(MeasurementSet+'Vis_chan_0.bin', mode='rb') as file:
+                fileContent = file.read()
+                Visibilities = np.array(struct.unpack("d"*(len(fileContent)//8),fileContent))
+                self.Visibilities = Visibilities[::2]+1j*Visibilities[1::2]
+            file.close()
+            
+            with open(MeasurementSet+'ant_1.bin', mode='rb') as file:
+                fileContent = file.read()
+                self.antenna1 = np.array(struct.unpack("d"*(len(fileContent)//8),fileContent))
+            file.close()
+            
+            with open(MeasurementSet+'ant_2.bin', mode='rb') as file:
+                fileContent = file.read()
+                self.antenna2 = np.array(struct.unpack("d"*(len(fileContent)//8),fileContent))
+            file.close()
         
         #get list of antenna coordinates using location given in casapath
         self.get_antenna_coordinates(antennaconfig)
+        
+# ---------------------------------------------------------------------------
+        
+    def ms_to_bin(self,measurementset,filedir,Nchannels=1):
+        
+        script1 = ['ms.open({0})'.format(measurementset), \
+                'recD = ms.getdata(["data"])', 'aD = recD["data"]', \
+                'print(len(aD[0]))']
+                
+        casa = drivecasa.Casapy()
+        temp = casa.run_script(script1)
+        Nchannels = int(temp[0][7])
+                   
+        main_script = ['from array import array' , 'import struct', 'import numpy as np', \
+                'WritebaseName={0}'.format(str(filedir)),'print(WritebaseName)','ms.open({0})'.format(measurementset), \
+                'recD = ms.getdata(["data"])','aD=recD["data"]', \
+                'UVW=ms.getdata(["UVW"])','uvpoints=UVW["uvw"]', \
+                'u=uvpoints[0]','v=uvpoints[1]', \
+                'antD1 = ms.getdata(["antenna1"])','antD1=antD1["antenna1"]', \
+                'antD2 = ms.getdata(["antenna2"])','antD2=antD2["antenna2"]', \
+                'f = open(WritebaseName + "ant_1.bin","wb")', \
+                'data = struct.pack("d"*len(antD1),*antD1)', \
+                'f.write(data)','f.close()', \
+                'f = open(WritebaseName + "ant_2.bin","wb")', \
+                'data = struct.pack("d"*len(antD2),*antD2)', \
+                'f.write(data)', 'f.close()', \
+                'f = open(WritebaseName + "u.bin", "wb")', \
+                'data = struct.pack("d"*len(u),*u)', \
+                'f.write(data)','f.close()', \
+                'f = open(WritebaseName + "v.bin", "wb")', \
+                'data= struct.pack("d"*len(v),*v)', \
+                'f.write(data)','f.close()']
+                
+        for i in range(Nchannels):
+            main_script.append('datalist = np.zeros([2*len(aD[0][{0}])],float)'.format(i))
+            main_script.append('datalist[::2] = aD[0][{0}][:].real'.format(i))
+            main_script.append('datalist[1::2]= aD[0][{0}][:].imag'.format(i))
+            main_script.append('f = open(WritebaseName+"Vis_chan_"+str({0})+".bin","wb")'.format(i))
+            main_script.append('data = struct.pack("d"*len(datalist),*datalist)')
+            main_script.append('f.write(data)')
+            main_script.append('f.close()')
+
+                
+        
+        temp = casa.run_script(main_script)
+
+        print("Done \n")
+        return
         
 # ---------------------------------------------------------------------------
         
@@ -102,6 +181,8 @@ class Saboteur(object):
     
         self.get_Nbaselines()
         self.get_Ntsteps()
+        return
+        
 # ---------------------------------------------------------------------------    
     def get_Nbaselines(self):
         
@@ -122,6 +203,7 @@ class Saboteur(object):
         
         if len(self.Visibilities) % self.Nbaselines != 0:
             print('WARNING: shape mismatch between visibilities and baselines')
+        return
         
 # ---------------------------------------------------------------------------        
 
