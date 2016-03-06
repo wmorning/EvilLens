@@ -12,7 +12,7 @@ from astropy.cosmology import FlatLambdaCDM
 from astropy.io import fits
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import interpolate
+from scipy import interpolate, spatial
 from scipy.integrate import simps
 from time import time
 
@@ -123,6 +123,73 @@ class GravitationalLens(object):
         
         self.kappa = (3.0-gamma)/2.0 *(self.ThetaE.value/np.sqrt(self.q*xprime**2+yprime**2/self.q))**(gamma-1)
         return
+        
+    def build_kappa_from(self,NbodySim,evNbodySim,NX,NY,pixscale,n=1,n2=1):
+        '''
+        Read the outputs of an N-body simulation, assumes NbodySim is filename of the original positions of
+        particles in an N-body simulation, evNbodySim is evolved positions of particles in an N-body simulation.
+        '''
+        
+        raise Exception('Cannot build from N-body simulation yet. \n')
+        
+        x = np.loadtxt( NbodySim )
+        
+        tesl = spatial.Delaunay(x)
+        
+        xn = np.loadtxt(evNbodySim)
+        
+        # locate barycenters of tetrahedra
+        xc = xn[tesl.simplices[:,0],:]+xn[tesl.simplices[:,1],:]+xn[tesl.simplices[:,2],:]+xn[tesl.simplices[:,3],:]
+ 
+        ### DO ###
+        # Add moment of inertia to get higher order approximation to the density 
+#        Q = np.zeros(tesl.shape[0],2,2)
+#        Q[:,0,0] = np.sum([xn[tesl.simplices[:,i],1]*xn[tesl.simplices[:,j],1]-xn[tesl.simplices[:,i],2]*xn[tesl.simplices[:,j],2] for i in range(4) for j in range(i+1)],axis=0)/10.0
+#        Q[:,1,0] = -np.sum([(1+i==j)*xn[tesl.simplices[:,i],0]*xn[tesl.simplices[:,i],1] for i in range(4) for j in range(4)],axis=0)/20.0
+#        Q[:,0,1] = -np.sum([(1+i==j)*xn[tesl.simplices[:,i],1]*xn[tesl.simplices[:,j],0] for i in range(4) for j in range(4)],axis=0)/20.0
+#        Q[:,1,1] = np.sum([xn[tesl.simplices[:,i],0]*xn[tesl.simplices[:,j],0]-xn[tesl.simplices[:,i],2]*xn[tesl.simplices[:,j],2] for i in range(4) for j in range(i+1)],axis=0)/10.0
+        
+        a = np.zeros(4*xc.shape[0],3)
+        a[::4,:] = np.sqrt(5)*xn[tesl.simplices[0],:]/5.0+(1-np.sqrt(5/5.0))*xc
+        a[1::4,:] = np.sqrt(5)*xn[tesl.simplices[0],:]/5.0+(1-np.sqrt(5/5.0))*xc
+        a[2::4,:] = np.sqrt(5)*xn[tesl.simplices[0],:]/5.0+(1-np.sqrt(5/5.0))*xc
+        a[3::4,:] = np.sqrt(5)*xn[tesl.simplices[0],:]/5.0+(1-np.sqrt(5/5.0))*xc
+        
+        ### DO ###
+        # Change to Recursive TCM for arbitrary accuracy.  
+        
+        # while tetrahedron extends multiple cells:
+        #       divide tetrahedron along longest axis
+        #       save number of divisions for each one
+        # compute new barycenters and their masses
+        
+        #discard anything that falls outside of map
+        
+        a = a[np.where((a[:,0])>np.min(self.x)) & (a[:,0]<np.max(self.x)) & (a[:,1]>np.min(self.y)) & (a[:,1]<np.max(self.y)),:]
+        
+        # create grid used to deposit density
+        self.setup_grid(NX=NX,NY=NY,pixscale=pixscale)
+        self.x *= (np.pi*self.Dd/3600.0/180.0).to(units.Mpc).value
+        self.y *= (np.pi*self.Dd/3600.0/180.0).to(units.Mpc).value
+        self.kappa = np.zeros(self.x.shape)
+        
+        # CIC interpolation to density grid for kappa
+
+        i = self.x[0,:].searchsorted(a[:,0])-1
+        j = self.y[:,0].searchsorted(a[:,1])-1
+        dx= a[:,0]-self.x[0,i] 
+        dy= a[:,1]-self.y[j,0]
+        
+        for k in xrange(0,len(i)):
+            self.kappa[i[k],j[k]]    += m*(1-dx[k])*(1-dy[k])/4.0
+            self.kappa[i[k]+1,j[k]]  += m * dx[k] * (1-dy[k])/4.0
+            self.kappa[i[k],j[k]+1]  += m * (1-dx[k]) * dy[k]/4.0
+            self.kappa[i[k]+1,j[k]+1]+= m * dx[ k ] * dy[ k ]/4.0
+        
+        self.kappa *= units.solMass/units.Mpc**2
+        self.kappa /= self.SigmaCrit
+        self.x /= np.pi*self.Dd/3600.0/180.0
+        self.y /= np.pi*self.Dd/3600.0/180.0
         
 # ----------------------------------------------------------------------
        
@@ -286,6 +353,39 @@ class GravitationalLens(object):
                             (self.image_y[i,j]-self.y)**2))
                 
                     
+            elif method == 'FFT':
+                '''
+                Calculate the lensing potential using an FFT, and take the derivative to get the deflection angles.
+                '''
+                # pad the arrays to assume vacuum boundary conditions.
+                k_pad = np.zeros([self.kappa.shape[0]*3,self.kappa.shape[1]*3])
+                k_pad[self.kappa.shape[0]:2*self.kappa.shape[0],self.kappa.shape[1]:2*self.kappa.shape[1]] =self.kappa
+                
+                k_pad_ft = np.fft.fft2(k_pad)
+                fx = np.fft.fftfreq(3*self.x.shape[0],self.pixscale)
+                fy = np.fft.fftfreq(3*self.x.shape[0],self.pixscale)
+                fx,fy = np.meshgrid(fx,fy)
+                psif = k_pad_ft /(2*np.pi**2*(fx**2+fy**2))
+                psif[0,0] = 0
+                
+                psi = np.fft.ifft2(psif)[self.kappa.shape[0]:2*self.kappa.shape[0],self.kappa.shape[1]:2*self.kappa.shape[1]]
+                alpha_y, alpha_x = np.gradient(psi.real,self.pixscale)
+                alpha_y *= -1
+                alpha_x *= -1
+                
+                # keep the oversampling and pixel size ratio
+                xmin = self.NX // 2 - self.n2 * ( self.NX // ( 2 * self.n ) )
+                xmax = self.NX // 2 + self.n2 * ( self.NX // ( 2 * self.n ) )
+                ymin = self.NY // 2 - self.n2 * ( self.NY // ( 2 * self.n ) )
+                ymax = self.NY // 2 + self.n2 * ( self.NY // ( 2 * self.n ) )
+                
+                alpha_x = alpha_x[xmin:xmax:self.n2,ymin:ymax:self.n2]
+                alpha_y = alpha_y[xmin:xmax:self.n2,ymin:ymax:self.n2]
+                
+                print 'resetting image (x,y) coordinates'
+                self.image_x = self.x[xmin:xmax:self.n2,ymin:ymax:self.n2]
+                self.image_y = self.y[xmin:xmax:self.n2,ymin:ymax:self.n2]
+            
                         
             else:
                 print('you must choose a valid method of integration')
@@ -302,10 +402,13 @@ class GravitationalLens(object):
     
 # ----------------------------------------------------------------------    
     
-    def plot(self,mapname, caustics=True):    
+    def plot(self,mapname, caustics=True,Ngridlines=100,xlim=None,ylim=None,figscale=1):    
         '''
-        Plot the given map as a nice colorscale image, with contours.
+        Plot the given map as a nice colorscale image, with contours if need be.
         '''
+
+        
+        
         # Which map do we want to plot?
         # And what options does that mean we need?
         if mapname == "kappa":
@@ -382,9 +485,9 @@ class GravitationalLens(object):
         
         # set figure up for multiple plots:
         if mapname == "alpha":
-            px,py = 2,1       
+            px,py = 2*figscale,1*figscale       
         else:
-            px,py = 1,1
+            px,py = 1*figscale,1*figscale
         
         
         figprops = dict(figsize=(5*px,5*py), dpi=128)
@@ -397,13 +500,8 @@ class GravitationalLens(object):
         
         
         # 2) The cubehelix map is linear grayscale on a BW printer
-        #    for non-lensed image, if caustics are to be plotted, 
-        #    use inverse cubehelix
-        if mapname =="non-lensed image":
-            if caustics is True:
-                options['cmap'] = plt.get_cmap('cubehelix_r')
-        else:
-            options['cmap'] = plt.get_cmap('cubehelix')
+        options['cmap'] = plt.get_cmap('cubehelix')
+
         
         # Start the figure:
         fig = plt.figure(**figprops)
@@ -437,20 +535,18 @@ class GravitationalLens(object):
             plt.imshow(img, **options)
             cbar = plt.colorbar(shrink = 0.75)
             cbar.set_label(r'$\alpha_{x} $ / arcsec',fontsize=12)
-            plt.xlabel('x / arcsec')
-            plt.ylabel('y / arcsec')
+
         elif mapname == "alpha_y":
             plt.imshow(img, **options)
             cbar = plt.colorbar(shrink = 0.75)
             cbar.set_label(r'$\alpha_{y} $ / arcsec',fontsize=12)
-            plt.xlabel('x / arcsec')
-            plt.ylabel('y / arcsec') 
+
         elif mapname == "lensed image":
             #plot same as everything else if achromatic
             if len(img.shape)==2:
                 plt.imshow(img,**options)
                 cbar = plt.colorbar(shrink = 0.75)
-                cbar.set_label('Flux / mJy',fontsize=12)
+                cbar.set_label('Flux / arbitrary units',fontsize=12)
             elif (img.shape[0])==3:
                 options['vmin']=None
                 options['vmax']=None
@@ -460,15 +556,13 @@ class GravitationalLens(object):
                 plt.imshow(img_new, **options)
             else:
                 raise Exception("Cannot plot multiwavelength images yet.\n")
-
-            plt.xlabel('x / arcsec')
-            plt.ylabel('y / arcsec')            
+        
         elif mapname == "non-lensed image":
             
             if len(img.shape)==2:
                 plt.imshow(img,**options)
                 cbar = plt.colorbar(shrink = 0.75)
-                cbar.set_label('Flux / mJy', fontsize=12)
+                cbar.set_label('Flux / arbitrary units', fontsize=12)
             elif (img.shape[0])==3:
                 options['vmin']=None
                 options['vmax']=None
@@ -478,20 +572,27 @@ class GravitationalLens(object):
                 plt.imshow(img_new, **options)
             else:
                 raise Exception("Cannot plot many (>3) wavelength images yet.\n")
-
-            
             plt.xlabel('x / arcsec')
             plt.ylabel('y / arcsec')
+            
             if caustics is True:
-                plt.scatter(self.beta_x,self.beta_y, s=0.001)
+                pixstep1 = self.beta_x.shape[0]//Ngridlines
+                pixstep2 = self.beta_x.shape[1]//Ngridlines
+                for i in range(Ngridlines):
+                    plt.plot(self.beta_x[pixstep1*i,:],self.beta_y[pixstep1*i,:],'r-',linewidth=0.1)
+                    plt.plot(self.beta_x[:,pixstep2*i],self.beta_y[:,pixstep2*i],'r-',linewidth=0.1)
+                
+                #plt.scatter(self.beta_x[::10,::10],self.beta_y[::10,::10], s=0.001)
                 plt.xlim(np.min(self.source.beta_x),np.max(self.source.beta_x))
                 plt.ylim(np.min(self.source.beta_y),np.max(self.source.beta_y))
             else:
                 pass
-            
+            if xlim is not None:
+                plt.xlim(xlim[0],xlim[1])
+                plt.ylim(ylim[0],ylim[1])
         else:
             pass
-        
+                
 
         # If we're in a notebook, display the plot. 
         # Otherwise, make a PNG.
@@ -503,7 +604,7 @@ class GravitationalLens(object):
             plt.savefig(pngfile)
             print "Saved plot to "+pngfile
             
-        return
+        return fig
 
 
 # ----------------------------------------------------------------------
@@ -582,14 +683,16 @@ class GravitationalLens(object):
                        self.image[i,j] = f_interpolation(self.beta_y[i,j],self.beta_x[i,j])
                 
             else:   #multiwavelength data cube
-                self.image = np.empty([self.source.Naxes,self.NX//self.n,self.NY//self.n], float)
+                self.image = np.empty([self.source.Naxes,self.NY//self.n,self.NX//self.n], float)
                 
                 for i in range(self.source.Naxes):
                     f_interpolation = interpolate.RectBivariateSpline(self.source.beta_y[:,0],self.source.beta_x[0,:],self.source.intensity[i,:,:],kx=1,ky=1)
-                
-                    for j in range(self.NX//self.n):
-                        for k in range(self.NY//self.n):
-                            self.image[i,j,k] = f_interpolation(self.beta_y[j,k],self.beta_x[j,k])
+                    
+                    self.image[i,:,:] = f_interpolation.ev(self.beta_y.flatten(),self.beta_x.flatten()).reshape([self.NY//self.n,self.NX//self.n])
+                    
+#                    for k in range(self.NX//self.n):
+#                        for j in range(self.NY//self.n):
+#                            self.image[i,j,k] = f_interpolation(self.beta_y[j,k],self.beta_x[j,k])
                             
         return
 
