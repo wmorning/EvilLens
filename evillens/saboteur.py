@@ -49,6 +49,43 @@ class Saboteur(object):
         return
     
 # ---------------------------------------------------------------------------
+
+    def Simulate_observation(self,lens,u,v,ant1,ant2,antennaconfig):
+        '''
+        Takes in a lens object, as well as uv configuration files 
+        (with u and v in meters) and the name of the antenna configuration
+        file used to generate the u and v files.
+        
+        Creates the visibilities, and attaches everything to the correct
+        location in the object.  Meant to simulate the read_data_from 
+        function but without having to use CASA.
+        '''
+        
+        assert isclass(type(lens),evil.GravitationalLens)
+        
+        if (type(u) == str):
+            self.u = evil.load_binary(u)
+        if (type(v) == str):
+            self.v = evil.load_binary(v)
+        if (type(ant1) == str):
+            self.ant1 = evil.load_binary(ant1)
+        if (type(ant2) == str):
+            self.ant2 = evil.load_binary(ant2)
+            
+        x = lens.image_x / 3600. / 180. * np.pi
+        y = lens.image_y / 3600. / 180. * np.pi
+        
+        vis = np.zeros(len(u),'complex')
+        
+        for i in range(len(u)):
+            vis[i] = np.sum(lens.image * np.exp( -2j*np.pi *(x*self.u[i] +y*self.v[i])))
+        
+        self.get_antenna_coordinates(antennaconfig)
+        
+        return
+          
+        
+# ---------------------------------------------------------------------------
     
     def read_data_from(self, MeasurementSet, antennaconfig,Blueberry=False):
         '''
