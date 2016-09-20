@@ -70,16 +70,21 @@ class Saboteur(object):
         assert issubclass(type(lens),evil.GravitationalLens)
         
         if (type(u) == str):
-            self.u = evil.load_binary(u)
-            self.u /= self.wavelength
+            u = evil.load_binary(u)
+            u /= self.wavelength
         if (type(v) == str):
-            self.v = evil.load_binary(v)
-            self.v /= self.wavelength
+            v = evil.load_binary(v)
+            v /= self.wavelength
         if (type(ant1) == str):
-            self.ant1 = evil.load_binary(ant1)
+            ant1 = evil.load_binary(ant1)
         if (type(ant2) == str):
-            self.ant2 = evil.load_binary(ant2)
+            ant2 = evil.load_binary(ant2)
             
+        self.u = u
+        self.v = v
+        self.ant1 = ant1
+        self.ant2 = ant2
+        
         x = lens.image_x / 3600. / 180. * np.pi
         y = lens.image_y / 3600. / 180. * np.pi
         
