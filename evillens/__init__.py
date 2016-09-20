@@ -6,3 +6,4 @@ from analyticPseudoJaffeLens import *
 from analyticNFWLens import *
 from Plot_utils import *
 from MCMC import *
+from microLens import *

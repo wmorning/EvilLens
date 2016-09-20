@@ -50,6 +50,29 @@ class MCMC(object):
             
         return
         
+    def get_confidence_interval(self,interval=0.95,Tburn=0):
+        
+        Int_up = np.percentile(self.data[:,Tburn:,:],100*(0.5+interval/2.0),axis={0,1})
+        Int_dn = np.percentile(self.data[:,Tburn:,:],100*(0.5-interval/2.0),axis={0,1})
+        
+        self.CI = np.zeros([len(Int_up),2])
+        
+        self.CI[:,0] = Int_up
+        self.CI[:,1] = Int_dn
+        
+        return 
+        
+    def get_errorbars(self,interval=0.95,Tburn=0):
+        
+        self.get_max_likelihood()
+        self.get_confidence_interval(interval=interval,Tburn=Tburn)
+        
+        self.errorup = np.zeros(len(self.best_params))
+        self.errordn = np.zeros(len(self.best_params))
+        
+        self.errorup = self.CI[:,0] - self.best_params
+        self.errordn = self.CI[:,1] - self.best_params
+        
     def GelmanRubin(self, N=100,interval=0.95):
         '''
         Compute the Gelman Rubin diagnostic on the currently loaded chains.
@@ -152,7 +175,21 @@ class MCMC(object):
             else:
                 pass
         self.data = data
+        self.Nwalkers -= 1
         
+        return
+    def cut_parameter(self,parameter_id):
+        data = np.zeros([self.Nwalkers,self.Niter,self.Nparameters-1])
+        for i in range(self.Nparameters):
+            if   i < parameter_id:
+                data[:,:,i] = self.data[:,:,i]
+            elif i > parameter_id:
+                data[:,:,i-1] = self.data[:,:,i]
+            else:
+                pass
+        self.data = data
+        self.Nparameters -= 1
+            
         return
         
     def get_max_likelihood(self):

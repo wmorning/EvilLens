@@ -34,7 +34,6 @@ class AnalyticSIELens(evil.GravitationalLens):
         Create kappa map using current parameters.  Also allows 
         user to manually set lens parameters if they want to.
         - sigma is central stellar velocity dispersion in km/s
-        - q3 is axis ratio of oblate ellipsoid
         - centroid is x,y coordinates of center
         - r_c is core radius, in arcseconds
         - inclination is the inclination relative to the lens plane
@@ -59,57 +58,69 @@ class AnalyticSIELens(evil.GravitationalLens):
         #compute Einstein radius, in arcsec:
         b = 4*np.pi *((self.sigma/constants.c)**2)*self.Dds/self.Ds
         self.b = b.decompose()*(3600.0*180.0/np.pi)
-         
-         # Now compute kappa using lens equation from Saas Fe.
-        #self.kappa = self.b.value /(2.0*np.sqrt(self.q**2*((self.x-self.centroid[0])**2+self.r_c**2)+(self.y-self.centroid[1])**2))
         
-        #compute kappa in rotated frame.        
-        #self.kappa = self.b.value /(2.0*np.sqrt(self.q**2*((xprime)**2+self.r_c**2)+(yprime)**2))
-        
-        
-        #compute kappa in rotated frome using equation from Koorman, Scheinder
+        # Compute kappa in rotated frome using equation from Koorman, Scheinder
         # & Bartelmann 1994
-#       1.   convert xprime,yprime to radians, and get r,theta
         xprime *=np.pi/3600.0/180.0
         yprime *=np.pi/3600.0/180.0
         r = np.sqrt(xprime**2+self.q**2*yprime**2)/b.decompose().value
         bc = self.r_c/3600.0/180.0*np.pi/b.decompose().value
         self.kappa = np.sqrt(self.q)/(2.0*np.sqrt(r**2+bc**2))
         
-#       2.           
-        
         return
          
 # ----------------------------------------------------------------------
         
     def deflect(self):
-        
-        # First convert image coordinates to angle from semimajor axis.
-        #image_theta = np.arctan2(self.image_y-self.centroid[1],self.image_x-self.centroid[0]) # check...
+        '''
+        Analytically calculate deflection angles at all the image pixel
+        positions.  No argunents required as long as lens has been 
+        constructed.  Returns assertion error if it hasn't.
+        '''
+        assert self.kappa is not None
         
         #rotate axes by the rotation angle around the centroid of the lens
         xprime = np.cos(self.rotation)*(self.image_x-self.centroid[0])+np.sin(self.rotation)*(self.image_y-self.centroid[1])
         yprime = -np.sin(self.rotation)*(self.image_x-self.centroid[0])+np.cos(self.rotation)*(self.image_y-self.centroid[1])
         
-        
-        # Deflect analytically.  This is old way, but it should be the same.
-        #self.alpha_x = (self.b.value/np.sqrt(1-self.q**2))*np.arctan(np.sqrt((1-self.q**2)/(self.q**2*np.cos(image_theta)**2+np.sin(image_theta)**2))*np.cos(image_theta))
-        #self.alpha_y = (self.b.value/np.sqrt(1-self.q**2))*np.arctanh(np.sqrt((1-self.q**2)/(self.q**2*np.cos(image_theta)**2+np.sin(image_theta)**2))*np.sin(image_theta))
-        
-        # Deflect analytically using equation from Saas Fe
-        #self.alpha_x = (self.b.value/np.sqrt(1-self.q**2)) * np.arctan((self.image_x-self.centroid[0])*np.sqrt(1-self.q**2)/(np.sqrt(self.q**2*((self.image_x-self.centroid[0])**2+self.r_c**2)+(self.image_y-self.centroid[1])**2)+self.r_c))        
-        #self.alpha_y = (self.b.value/np.sqrt(1-self.q**2)) * np.arctanh((self.image_y-self.centroid[1])*np.sqrt(1-self.q**2)/(np.sqrt(self.q**2*((self.image_x-self.centroid[0])**2+self.r_c**2)+(self.image_y-self.centroid[1])**2)+self.q**2*self.r_c))
-        
-        
-        
         #Deflect analytically for rotated SIE.  Then rotate back to original coordinate bases.
-
         #Do this using eq 27a from Koorman, Schneider, & Bartelmann
         phi = np.arctan2(yprime,xprime)
         self.phi = phi
-        qprime = np.sqrt(1-self.q**2 )     
-        alpha_x_prime = self.b.value*(np.sqrt(self.q)/qprime)*(np.arcsinh(np.cos(phi)*qprime/self.q))
-        alpha_y_prime = self.b.value*(np.sqrt(self.q)/qprime)*np.arcsin(qprime*np.sin(phi))
+        if np.isclose(self.q,1.): # Avoid NaN for q=1 using SIS.
+            alpha_x_prime = self.b.value*np.cos(phi)
+            alpha_y_prime = self.b.value*np.sin(phi)         
+        else:
+            if self.r_c is not None:
+                raise Exception("cannot include core radius yet\n")
+                x1 = xprime 
+                x2 = yprime
+                x = np.sqrt(xprime**2+self.q**2*yprime**2)/self.b.value
+                bc = self.r_c
+                qp = np.sqrt(1-self.q**2)
+                Qp = ((qp*np.sqrt(self.b**2+bc**2)+x1)**2 +self.q**4 *x2**2) \
+                    / ((self.q*x+qp*bc*x1)**2+qp**2 * bc**2 *x2**2)
+                Qm = ((qp*np.sqrt(self.b**2+bc**2)-x1)**2+self.q**4*x2**2) \
+                    / ((self.q*x-qp*bc*x1)**2+qp**2 * bc**2 *x2**2)
+                
+                R  = (x1**2 +self.q**4*x2**2 - qp**2 * (self.b**2+bc**2) - 2j*self.q**2*qp*np.sqrt(self.b**2+bc**2)*x2).value
+                S  = self.q**2*x**2 - qp**2 * bc**2 - 2j*self.q*qp*bc*x2
+                
+                print R
+                print S
+                
+                self.R = R
+                self.S = S
+                
+                alpha_x_prime = np.sqrt(self.q)/(4*qp) * np.log(Qp/Qm)
+                alpha_y_prime = -np.sqrt(self.q)/(2*qp)  * (np.angle(R)-np.angle(S))
+                
+                
+                
+            else:
+                qprime = np.sqrt(1-self.q**2 )     
+                alpha_x_prime = self.b.value*(np.sqrt(self.q)/qprime)*(np.arcsinh(np.cos(phi)*qprime/self.q))
+                alpha_y_prime = self.b.value*(np.sqrt(self.q)/qprime)*np.arcsin(qprime*np.sin(phi))
 
         self.alpha_x = np.cos(self.rotation)*alpha_x_prime-np.sin(self.rotation)*alpha_y_prime
         self.alpha_y = np.sin(self.rotation)*alpha_x_prime+np.cos(self.rotation)*alpha_y_prime
@@ -178,6 +189,135 @@ class AnalyticSIELens(evil.GravitationalLens):
         self.subhalo_masses = Msub.value
         self.subhalo_Rcore = Rcore
         self.subhalo_positions = centroid
+        
+        return
+        
+# ----------------------------------------------------------------------
+
+    def add_multipoles(self,M):
+        '''
+        Add angular multipoles to the lens model.
+        
+        Accepts a Nx2 vector specifying the N multipole moments to add.
+        The 2nd order multipole is external shear.  Definitions of
+        parameters are made to be compatible with Ripples (i.e. x,y 
+        components rather than magnitude and angle)
+        
+        The x,y components contain amplitude and phase information of
+        the shear/multipoles.  Note that the phase (arctan2(My,Mx))/m is 
+        defined WRT the positive x-axis.
+        '''
+        
+        M = np.array(M)
+        if len(M.shape) == 1: # Compatible with 1d shear array
+            M = M.reshape([1,2])
+        Nmoments = M.shape[0]
+                
+        # Get image polar coordinates in radians
+        imR     = np.sqrt((self.image_x-self.centroid[0])**2+(self.image_y-self.centroid[1])**2) 
+        imTheta = np.arctan2(self.image_y-self.centroid[1],self.image_x-self.centroid[0])
+        
+        for i in range(Nmoments):
+            m = i+2  # The first multipole is m=2 (shear)
+            if m == 2:
+                
+                Am = M[i,0] 
+                Bm = M[i,1]
+                
+                # calculate deflections
+                alphaR     = Am * imR * np.cos(2*imTheta) + Bm * imR * np.sin(2*imTheta)
+                alphaTheta = -Am * imR * np.sin(2*imTheta)+ Bm * imR * np.cos(2*imTheta)
+                
+                # convert back to cartesian coords
+                alphaX = alphaR * np.cos(imTheta) + alphaTheta * (-np.sin(imTheta))
+                alphaY = alphaR * np.sin(imTheta) + alphaTheta * (np.cos(imTheta))
+                
+                # subtract shear from current deflection angles, in arcsec
+                # NOTE: May influence inferred direction of shear if done
+                # wrong.
+                self.alpha_x -= alphaX 
+                self.alpha_y -= alphaY 
+            else:  # higher order multipoles
+                Am = M[i,0] 
+                Bm = M[i,1]
+                
+                # calculate deflections
+                alphaR     = (1/(1-m**2)) * (Am * np.cos(m*imTheta) + Bm * np.sin(m*imTheta))
+                alphaTheta = (m/(1-m**2)) * (-Am * np.sin(m*imTheta) + Bm * np.cos(m*imTheta))
+                
+                # convert back to cartesian coords
+                alphaX = alphaR * np.cos(imTheta) + alphaTheta * (-np.sin(imTheta))
+                alphaY = alphaR * np.sin(imTheta) + alphaTheta * (np.cos(imTheta))
+                
+                # add shear to current deflection angles
+                self.alpha_x -= alphaX 
+                self.alpha_y -= alphaY 
+            
+        self.Multipoles = M
+        
+        return
+        
+# ----------------------------------------------------------------------
+
+    def remove_multipoles(self):
+        '''
+        Just in case we ever want to get rid of added multipoles.  Does 
+        nearly the same thing as add_multipoles, but subtracts them from
+        deflection instead.  Only works if multipoles are already there.
+        '''
+        if not hasattr(self,'Multipoles'):
+            
+            print "Lens doesn't have multipoles"
+            return
+        
+        else:
+            
+            M = np.array(self.Multipoles)
+            if len(M.shape) == 1:
+                M = M.reshape([1,2])
+            Nmoments = M.shape[0]
+            Rs = 1 * np.pi / 180.0 / 3600.0
+        
+            # Get image polar coordinates in radians
+            imR     = np.sqrt((self.image_x-self.centroid[0])**2+(self.image_y-self.centroid[1])**2) * np.pi / 3600.0 / 180.0
+            imTheta = np.arctan2(self.image_y-self.centroid[1],self.image_x-self.centroid[0])
+        
+            for i in range(Nmoments):
+                m = i+2  # The first multipole is m=2 (shear)
+                if m == 2:
+                    n = 2
+                    
+                    Am = M[i,0] 
+                    Bm = M[i,1]
+                
+                    # calculate deflections
+                    alphaR     = Am * imR * np.cos(2*imTheta) + Bm * imR * np.sin(2*imTheta)
+                    alphaTheta = -Am * imR * np.sin(2*imTheta)+ Bm * imR * np.cos(2*imTheta)
+                
+                    # convert back to cartesian coords
+                    alphaX = alphaR * np.cos(imTheta) + alphaTheta * (-np.sin(imTheta))
+                    alphaY = alphaR * np.sin(imTheta) + alphaTheta * (np.cos(imTheta))
+                
+                    # add shear to current deflection angles, in arcsec
+                    self.alpha_x += alphaX * 3600 * 180 / np.pi
+                    self.alpha_y += alphaY * 3600 * 180 / np.pi
+                else:
+                    Am = M[i,0] 
+                    Bm = M[i,1]
+                
+                    # calculate deflections
+                    alphaR     = (1/(1-m**2)) * Rs * (Am * np.cos(m*imTheta) + Bm * np.sin(m*imTheta))
+                    alphaTheta = (m/(1-m**2)) * Rs * (-Am * np.sin(m*imTheta) + Bm * np.cos(m*imTheta))
+                
+                    # convert back to cartesian coords
+                    alphaX = alphaR * np.cos(imTheta) + alphaTheta * (-np.sin(imTheta))
+                    alphaY = alphaR * np.sin(imTheta) + alphaTheta * (np.cos(imTheta))
+                
+                    # add shear to current deflection angles, in arcsec
+                    self.alpha_x += alphaX * 3600 * 180 / np.pi
+                    self.alpha_y += alphaY * 3600 * 180 / np.pi
+        
+        delattr(self,'Multipoles')
         
         return
         

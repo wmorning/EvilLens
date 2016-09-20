@@ -107,7 +107,7 @@ class Source(object):
         return        
 
 # ----------------------------------------------------------------------
-    def build_from_clumps(self,size=2.0,clump_size = 0.1,clump_size_rms=0.0005,axis_ratio=1.0, orientation=0.0,center=[0,0], Nclumps=50, n = 1 , error =10**-8):
+    def build_from_clumps(self,size=2.0,clump_size = 0.1,axis_ratio=1.0, orientation=0.0,center=[0,0], Nclumps=50, n = 1 , error =10**-8,singlesource=False,seeds=[1,2,3],Flux=1.0):
         #raise Exception("cannot build source from clumps yet. \n")
         '''
         Build source from gaussian clumps centered about specified position.
@@ -130,18 +130,25 @@ class Source(object):
         self.Nclumps = Nclumps
         self.center = center
         self.n = n
+        self.Flux=Flux
         #compute rms radius in arcsec
         self.size = np.arctan((size *units.kpc) / self.Ds ).to(units.arcsec).value
-        self.clump_size = np.arctan((clump_size*units.kpc)/self.Ds).to(units.arcsec).value
-        self.clump_size_rms = np.arctan((clump_size_rms*units.kpc)/self.Ds).to(units.arcsec).value     
+        self.clump_size = np.arctan((clump_size*units.kpc)/self.Ds).to(units.arcsec).value 
         #pick random positions inside of 4r_eff          
 #        rlist = np.sqrt(np.random.random(Nclumps))*4.0*self.size
 #        thetalist = np.random.random(Nclumps)*2*np.pi
-        xpos_orig = np.random.exponential(self.size,Nclumps)/np.sqrt(self.axis_ratio)*np.random.choice([-1,1],Nclumps)
-        ypos_orig = np.random.exponential(self.size,Nclumps)*np.sqrt(self.axis_ratio)*np.random.choice([-1,1],Nclumps)
-        self.xlist = xpos_orig*np.cos(self.orientation)-ypos_orig*np.sin(self.orientation) + self.center[0]
-        self.ylist = xpos_orig*np.sin(self.orientation)+ypos_orig*np.cos(self.orientation) +self.center[1]
-        
+        if singlesource ==False:
+            # seed random # generation
+            np.random.seed(seeds[0])
+            xpos_orig = np.random.exponential(self.size,Nclumps)/np.sqrt(self.axis_ratio)*np.random.choice([-1,1],Nclumps)
+            np.random.seed(seeds[1])
+            ypos_orig = np.random.exponential(self.size,Nclumps)*np.sqrt(self.axis_ratio)*np.random.choice([-1,1],Nclumps)
+            np.random.seed(seeds[2])
+            self.xlist = xpos_orig*np.cos(self.orientation)-ypos_orig*np.sin(self.orientation) + self.center[0]
+            self.ylist = xpos_orig*np.sin(self.orientation)+ypos_orig*np.cos(self.orientation) +self.center[1]
+        else:
+            self.xlist = np.array([center[0],100000000])
+            self.ylist = np.array([center[1],100000000])   
         #determine constant b_n which allows us to use r as half light radius
         def fx(n,bn):
             return(2*sp.gammainc(2*n,bn)-1)
@@ -163,18 +170,21 @@ class Source(object):
         else:
             self.b_n = x1
         
-        #self.Blist = np.exp(-self.b_n*((np.sqrt((np.cos(self.orientation)*(self.xlist-self.center[0])-np.sin(self.orientation)*(self.ylist-self.center[1]))**2*self.axis_ratio+((self.xlist-self.center[0])*np.sin(self.orientation)+(self.ylist-self.center[1])*np.cos(self.orientation))**2/self.axis_ratio)/self.size)**(1/self.n)-1))        
-        self.Slist = abs(np.random.normal(self.clump_size,self.clump_size_rms,self.Nclumps))
+        #self.Blist = np.exp(-self.b_n*((np.sqrt((np.cos(self.orientation)*(self.xlist-self.center[0])-np.sin(self.orientation)*(self.ylist-self.center[1]))**2*self.axis_ratio+((self.xlist-self.center[0])*np.sin(self.orientation)+(self.ylist-self.center[1])*np.cos(self.orientation))**2/self.axis_ratio)/self.size)**(1/self.n)-1))   
+        np.random.seed(seeds[2])     
+        self.Slist = np.random.exponential(self.clump_size,self.Nclumps)
         
         for i in range(self.Nclumps):
             if i==0:
-                self.intensity = np.exp(-0.5*((self.beta_x-self.xlist[i])**2+(self.beta_y-self.ylist[i])**2)/self.Slist[i]**2)
+                self.intensity = (1.0/np.sqrt(2*np.pi*self.Slist[i]**2))*np.exp(-0.5*((self.beta_x-self.xlist[i])**2+(self.beta_y-self.ylist[i])**2)/self.Slist[i]**2)
             else:
-                self.intensity +=np.exp(-0.5*((self.beta_x-self.xlist[i])**2+(self.beta_y-self.ylist[i])**2)/self.Slist[i]**2)
+                self.intensity +=(1.0/np.sqrt(2*np.pi*self.Slist[i]**2))*np.exp(-0.5*((self.beta_x-self.xlist[i])**2+(self.beta_y-self.ylist[i])**2)/self.Slist[i]**2)
         
 
         self.intensity *= np.exp(-self.b_n*((np.sqrt((np.cos(self.orientation)*(self.beta_x-self.center[0])+np.sin(self.orientation)*(self.beta_y-self.center[1]))**2*self.axis_ratio+(-(self.beta_x-self.center[0])*np.sin(self.orientation)+(self.beta_y-self.center[1])*np.cos(self.orientation))**2/self.axis_ratio)/self.size)**(1/self.n)-1))        
-
+        
+        # Normalize flux of all sources to input total flux
+        self.intensity *= self.Flux/(np.sum(self.intensity)*self.pixscale**2)
         return
         
 # ----------------------------------------------------------------------

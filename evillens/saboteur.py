@@ -12,6 +12,7 @@ from scipy import interpolate
 import matplotlib.pyplot as plt
 import subprocess
 import struct
+from scipy.interpolate import interp1d
 import astropy.convolution as astconv
 try:
     import drivecasa
@@ -116,55 +117,417 @@ class Saboteur(object):
         
         #get list of antenna coordinates using location given in casapath
         self.get_antenna_coordinates(antennaconfig)
-        
+
 # ---------------------------------------------------------------------------
         
-    def ms_to_bin(self,measurementset,filedir,Nchannels=1):
+    def ms_to_bin(self,measurementset,filedir):
+        '''
+        Opens a CASA measurement set (using the drivecasa software) and writes
+        the visibilities, uv coordinates, antennas, sigmas, and times of all
+        the integrations to binary files (binary files are easier to deal with
+        outside of CASA).  This should be regarded as the first step in the 
+        process of reducing the data, as the sigmas should still be scaled, and
+        the dOdphase matrices should still be built.
+        '''
         
         script1 = ['ms.open({0})'.format(measurementset), \
-                'recD = ms.getdata(["data"])', 'aD = recD["data"]', \
-                'print(len(aD[0]))']
+                'recD = ms.getdata(["axis_info"])', 'aD = recD["axis_info"]["freq_axis"]["chan_freq"]', \
+                'print(len(aD))','print(len(aD[0]))']
                 
         casa = drivecasa.Casapy()
         temp = casa.run_script(script1)
         Nchannels = int(temp[0][7])
+        Nspw = int(temp[0][10])
                    
         main_script = ['from array import array' , 'import struct', 'import numpy as np', \
                 'WritebaseName={0}'.format(str(filedir)),'print(WritebaseName)','ms.open({0})'.format(measurementset), \
-                'recD = ms.getdata(["data"])','aD=recD["data"]', \
+                'recD = ms.getdata(["data","axis_info"])','aD=recD["data"]', \
                 'UVW=ms.getdata(["UVW"])','uvpoints=UVW["uvw"]', \
+                'freq = recD["axis_info"]["freq_axis"]["chan_freq"]', \
                 'u=uvpoints[0]','v=uvpoints[1]', \
                 'antD1 = ms.getdata(["antenna1"])','antD1=antD1["antenna1"]', \
                 'antD2 = ms.getdata(["antenna2"])','antD2=antD2["antenna2"]', \
+                'Sigma = ms.getdata(["sigma"])["sigma"]',\
                 'f = open(WritebaseName + "ant_1.bin","wb")', \
                 'data = struct.pack("d"*len(antD1),*antD1)', \
                 'f.write(data)','f.close()', \
                 'f = open(WritebaseName + "ant_2.bin","wb")', \
                 'data = struct.pack("d"*len(antD2),*antD2)', \
                 'f.write(data)', 'f.close()', \
-                'f = open(WritebaseName + "u.bin", "wb")', \
-                'data = struct.pack("d"*len(u),*u)', \
-                'f.write(data)','f.close()', \
-                'f = open(WritebaseName + "v.bin", "wb")', \
-                'data= struct.pack("d"*len(v),*v)', \
-                'f.write(data)','f.close()']
+                'time = ms.getdata(["time"])["time"]',\
+                'f=open(WritebaseName + "time.bin","wb")',\
+                'data = struct.pack("d"*len(time),*time)',\
+                'f.write(data)','f.close()',\
+                'print np.sqrt(np.max((aD[0][0][:].real+aD[1][0][:].real)**2+(aD[0][0][:].imag+aD[1][0][:].imag)**2))']
                 
         for i in range(Nchannels):
-            main_script.append('datalist = np.zeros([2*len(aD[0][{0}])],float)'.format(i))
-            main_script.append('datalist[::2] = aD[0][{0}][:].real'.format(i))
-            main_script.append('datalist[1::2]= aD[0][{0}][:].imag'.format(i))
-            main_script.append('f = open(WritebaseName+"Vis_chan_"+str({0})+".bin","wb")'.format(i))
-            main_script.append('data = struct.pack("d"*len(datalist),*datalist)')
-            main_script.append('f.write(data)')
-            main_script.append('f.close()')
+            for j in range(Nspw):
+                main_script.append('datalist = np.zeros([2*len(aD[0][{0}])],float)'.format(i))
+                main_script.append('datalist[::2] = (aD[0][{0}][:].real+aD[1][{0}][:].real)/2.0'.format(i))
+                main_script.append('datalist[1::2]= (aD[0][{0}][:].imag+aD[1][{0}][:].imag)/2.0'.format(i))
+                main_script.append('f = open(WritebaseName+"Vis_spw_{0}_chan_{1}.bin","wb")'.format(j,i))
+                main_script.append('data = struct.pack("d"*len(datalist),*datalist)')
+                main_script.append('f.write(data)')
+                main_script.append('f.close()')
+                main_script.append('sigmalist = np.zeros([len(Sigma[0])],float)')
+                main_script.append('sigmalist[:] = np.sqrt(Sigma[0]**2+Sigma[1]**2)')
+                main_script.append('f = open(WritebaseName+"sigma_spw_{0}_chan_{1}.bin","wb")'.format(j,i))
+                main_script.append('data = struct.pack("d"*len(sigmalist),*sigmalist)')
+                main_script.append('f.write(data)')
+                main_script.append('f.close()')
+                main_script.append('f = open(WritebaseName + "u_spw_{0}_chan_{1}.bin", "wb")'.format(j,i))
+                main_script.append('udata = u/(3*(10**8)/freq[{0}][{1}])'.format(i,j))
+                main_script.append('data = struct.pack("d"*len(udata),*udata)')
+                main_script.append('f.write(data)')
+                main_script.append('f.close()')
+                main_script.append('f = open(WritebaseName + "v_spw_{0}_chan_{1}.bin", "wb")'.format(j,i))
+                main_script.append('vdata = v/(3*(10**8)/freq[{0}][{1}])'.format(i,j))
+                main_script.append('data= struct.pack("d"*len(v),*vdata)')
+                main_script.append('f.write(data)')
+                main_script.append('f.close()')
+                main_script.append('np.savetxt(WritebaseName+"chan_wav.txt",3*10**8/freq)')
 
                 
         
         temp = casa.run_script(main_script)
+        #for i in range(len(main_script)):
+        #    print(main_script[i])
+        print temp
+        print("Measurement set written as binary \n")
+        return Nchannels , Nspw
+        
+# ---------------------------------------------------------------------------
 
-        print("Done \n")
+    def get_sigma_scaling(self,u,v,vis,sigma):
+        
+        UVMAX = np.max([abs(u),abs(v)])*1.01
+
+        Nbins = 256
+        
+        Bins = np.arange(-UVMAX,UVMAX+12,12.0)
+        P,reject1,reject2 = np.histogram2d(u,v,bins=Bins)
+        
+#        B1 = interp1d(Bins,range(Nbins),'nearest')
+#        iB1 = B1(u)
+#        iB2 = B1(v)
+
+        [row,col] = np.where(P!=0)
+        A_recovered = np.zeros(P.shape)
+        B_recovered = np.zeros(P.shape)
+
+        noise_r = np.zeros(u.shape)
+        noise_i = np.zeros(v.shape)
+        
+        indI = np.zeros(u.shape,int)
+        total=0
+        for icount in range(len(row)):
+            inds = np.where((v>=Bins[col[icount]])&(v<Bins[col[icount]+1])&(u>=Bins[row[icount]])&(u<Bins[row[icount]+1]))[0]
+            
+            if len(inds) ==1:
+                continue
+            elif len(inds)%2 ==1:
+                inds = inds[:-1]
+            I = inds[::2]
+            J = inds[1::2]
+            noise_r[I] = (vis[I]-vis[J]).real
+            noise_i[I] = (vis[I]-vis[J]).imag
+            indI[I] = J
+            total += len(inds)
+        
+        iI = np.where(noise_r != 0)[0]
+        
+        N = len(iI)
+        SIGMA_SCALING = np.sqrt(N/np.sum((noise_r[iI]/np.sqrt(sigma[iI]**2+sigma[indI[iI]]**2))**2)) 
+        
+        return SIGMA_SCALING
+        
+
+# ---------------------------------------------------------------------------
+
+    def build_dOdphase(self, ant1, ant2,time,NUM_TIME_STEPS=1):
+        
+        '''
+        Create matrix files Rowisone.bin, Colisone.bin, Rowisminusone.bin
+        and Colisminusone.bin which contain index labels for the +1 and -1 
+        values in the dtheta/dphi matrix.  Takes 2 lists of antenna numbers
+        ant1 and ant2 (contained in a measurement set).
+            
+        Right now it breaks the observation into approximately equal length
+        chunks (the last one may be slightly shorter).  In the future, we 
+        could upgrade by specifying the intervals where the phase is expected
+        to change.
+    
+        We'll also specify that the phase of the zeroth antenna is our 
+        reference phase (so we set it to 0).
+        '''
+    
+        NUM_ANT = int(np.max([np.max(ant1),np.max(ant2)]))
+        NUM_BL  = (NUM_ANT*(NUM_ANT-1))/2
+        NUM_TIME_STEPS = int(NUM_TIME_STEPS)
+        
+        # Determine time cuts (-1 and +1 to guarantee # of intervals)
+        tstart  = np.min(time)-1.0
+        tend    = np.max(time)+1.0
+        tdiff   = tend-tstart
+        tswitch = tdiff/float(NUM_TIME_STEPS)
+
+        rowisone      = np.zeros(len(ant1),int)
+        colisone      = np.zeros(len(ant1),int)
+        rowisminusone = np.zeros(len(ant2),int)
+        colisminusone = np.zeros(len(ant2),int)
+        
+        for i in range(len(rowisone)):
+            if ant1[i] == 0: # First antenna phase is always fixed to zero
+                rowisminusone[i] = i
+                colisminusone[i] = ant2[i]-1 + int((time[i]-tstart)//tswitch)*(NUM_ANT)
+            else:
+                rowisone[i]      = i 
+                colisone[i]      = ant1[i]-1 + int((time[i]-tstart)//tswitch)*(NUM_ANT)
+                rowisminusone[i] = i 
+                colisminusone[i] = ant2[i]-1 + int((time[i]-tstart)//tswitch)*(NUM_ANT)
+                
+        # clip where antenna1 is present from this list
+        colisone = colisone[(rowisone !=0)]
+        rowisone = rowisone[(rowisone !=0)]        
+        
+        
+        return rowisone , colisone , rowisminusone , colisminusone
+
+
+# --------------------------------------------------------------------------- 
+    
+    def Reduce_ms(self , MSNAME , OUTPUTDIR ,NUM_TIME_STEPS=1):
+        '''
+        Last step in data reduction pipeline
+        
+        Open a ready to go measurement set (binned visibilities, flagged visibilities
+        removed, etc.), and write the files that are used by the pipeline to the directory
+        OUTPUTDIR. 
+        '''
+        
+        Nchan, Nspw = self.ms_to_bin(MSNAME, '"/Users/wmorning/research/data/temp/"')
+        
+        Vis , ssqinv , u , v , rowisone , colisone , rowisminusone , colisminusone , chan  = \
+                self.prepare_data('/Users/wmorning/research/data/temp/',Nspw,Nchan,NUM_TIME_STEPS=NUM_TIME_STEPS)
+                
+        with open(OUTPUTDIR+'vis_chan_0.bin','wb') as file:
+            data = struct.pack('d'*len(Vis),*Vis)
+            file.write(data)
+        file.close()
+        
+        with open(OUTPUTDIR+'sigma_squared_inv.bin','wb') as file:
+            data = struct.pack('d'*len(ssqinv),*ssqinv)
+            file.write(data)
+        file.close()
+        
+        with open(OUTPUTDIR+'u.bin','wb') as file:
+            data = struct.pack('d'*len(u),*u)
+            file.write(data)
+        file.close()
+        
+        with open(OUTPUTDIR+'v.bin','wb') as file:
+            data = struct.pack('d'*len(v),*v)
+            file.write(data)
+        file.close()
+        
+        with open(OUTPUTDIR+'chan.bin','wb') as file:
+            data = struct.pack('d'*len(chan),*chan)
+            file.write(data)
+        file.close()
+        
+        with open(OUTPUTDIR+'ROWisone.bin','wb') as file:
+            data = struct.pack('d'*len(rowisone),*rowisone)
+            file.write(data)
+        file.close()
+        
+        with open(OUTPUTDIR+'COLisone.bin','wb') as file:
+            data = struct.pack('d'*len(colisone),*colisone)
+            file.write(data)
+        file.close()
+        
+        with open(OUTPUTDIR+'ROWisminusone.bin','wb') as file:
+            data = struct.pack('d'*len(rowisminusone),*rowisminusone)
+            file.write(data)
+        file.close()
+        
+        with open(OUTPUTDIR+'COLisminusone.bin','wb') as file:
+            data = struct.pack('d'*len(colisminusone),*colisminusone)
+            file.write(data)
+        file.close()
+
+        print 'Data written to {0}'.format(OUTPUTDIR)
+        
         return
         
+# ----------------------------------------------------------------------------
+    def prepare_data(self, direct,Nspw,Nchan, bintime=None,NUM_TIME_STEPS=1):
+        
+        wav = np.loadtxt(direct+'chan_wav.txt')
+        if len(wav.shape)==0:
+            wav = np.array([[wav]])  # bug fix for single spw, single channel case
+        elif len(wav.shape)==1:
+            wav = np.array([wav])    # bug fix for single spw case
+        
+        
+        #  load all of the data (all channels, all spws)
+        for i in range(Nspw):
+            for j in range(Nchan):
+                if (i==0) & (j==0):
+                    ut = evil.load_binary(direct+'u_spw_0_chan_0.bin')
+                    vt = evil.load_binary(direct+'v_spw_0_chan_0.bin')
+                    vist = evil.load_binary(direct+'vis_spw_0_chan_0.bin')
+                    sigmat = evil.load_binary(direct+'sigma_spw_0_chan_0.bin')
+                    ant1t = evil.load_binary(direct+'ant_1.bin')
+                    ant2t = evil.load_binary(direct+'ant_2.bin')
+                    timet = evil.load_binary(direct+'time.bin')
+                    u     = np.zeros([Nspw,Nchan,   len(ut)   ], float )
+                    v     = np.zeros([Nspw,Nchan,   len(vt)   ], float )
+                    vis   = np.zeros([Nspw,Nchan, len(vist)/2 ],complex)
+                    sigma = np.zeros([Nspw,Nchan, len(sigmat) ], float )
+                    ant1  = np.zeros([Nspw,Nchan,   len(ut)   ],  int  )
+                    ant2  = np.zeros([Nspw,Nchan,   len(ut)   ],  int  )
+                    chan  = np.zeros([Nspw,Nchan,   len(ut)   ],  int  ) 
+                    time  = np.zeros([Nspw,Nchan,   len(ut)   ], float )
+                    
+                    u[i,j,:]     = ut*wav[i,j]
+                    v[i,j,:]     = vt*wav[i,j]
+                    vis[i,j,:]   = vist[::2]+1j*vist[1::2]
+                    sigma[i,j,:] = sigmat
+                    ant1[i,j,:]  = ant1t
+                    ant2[i,j,:]  = ant2t
+                    time[i,j,:]  = timet
+                    chan[i,j,:]  +=j+Nchan*i
+                    ut = 0
+                    vt = 0
+                    vist = 0
+                    sigmat = 0
+                    ant1t = 0
+                    ant2t = 0
+                    sigmascl = self.get_sigma_scaling(u[i,j,:],v[i,j,:],vis[i,j,:],sigma[i,j,:])
+                    sigma[i,j,:] /= sigmascl
+                    u[i,j,:] /= wav[i,j]
+                    v[i,j,:] /= wav[i,j]
+                else:  
+                    u[i,j,:]    = evil.load_binary(direct+'u_spw_{0}_chan_{1}.bin'.format(i,j))*wav[i,j]
+                    v[i,j,:]    = evil.load_binary(direct+'v_spw_{0}_chan_{1}.bin'.format(i,j))*wav[i,j]
+                    vist  = evil.load_binary(direct+'vis_spw_{0}_chan_{1}.bin'.format(i,j))
+                    vis[i,j,:] = vist[::2]+1j*vist[1::2]
+                    sigma[i,j,:]= evil.load_binary(direct+'sigma_spw_{0}_chan_{1}.bin'.format(i,j))
+                    ant1[i,j,:] = evil.load_binary(direct+'ant_1.bin')
+                    ant2[i,j,:] = evil.load_binary(direct+'ant_2.bin')
+                    chan[i,j,:] +=j+Nchan*i
+                    sigmascl = self.get_sigma_scaling(u[i,j,:],v[i,j,:],vis[i,j,:],sigma[i,j,:])
+                    sigma[i,j,:] /= sigmascl
+                    u[i,j,:] /= wav[i,j]
+                    v[i,j,:] /= wav[i,j]
+                    time[i,j,:] = evil.load_binary(direct+'time.bin')
+                    
+        print "loaded all necessary files \n"
+        if bintime is not None:  # function doesn't work for now, but this is where it'll happen.
+            print "binning visibilities in intervals of {0} seconds".format(bintime)
+            u,v,vis,sigma,ant1,ant2 = self.bin_data(u,v,wav,vis,sigma,ant1,ant2,time,bintime)
+         
+        print "building dOdphase \n"
+        
+        ant1 = ant1.flatten()
+        ant2 = ant2.flatten()
+        time = time.flatten()
+        rowisone,colisone,rowisminusone,colisminusone = self.build_dOdphase(ant1,ant2,time,NUM_TIME_STEPS)
+        print "dOdphase built, writing data to disk"
+        sigma = sigma.flatten()
+        u = u.flatten()
+        v = v.flatten()
+        vis = vis.flatten()
+        chan=chan.flatten()
+        
+        Vis = np.zeros(2*len(vis),float)
+        Vis[::2] = vis.real
+        Vis[1::2]= vis.imag
+        ssqinv = np.zeros(2*len(sigma),float)
+        ssqinv[::2] = sigma**(-2)
+        ssqinv[1::2]= sigma**(-2)
+                
+        return Vis , ssqinv , u , v , rowisone , colisone , rowisminusone , colisminusone , chan
+
+# ---------------------------------------------------------------------------
+    def bin_data(self,u,v,wavelength,vis,sigma,ant1,ant2,time,bintime):
+        '''
+        Bin the data based on the baseline.  Bintime is given seconds, and determines
+        what is the maximum length of time that can be binned.  For any data whose
+        uv distance varies too much over that bintime, the interval will be broken up
+        into intervals across which it is ok to bin the visibilities.
+        (this function exists because CASA does things wrong).
+        '''
+        raise Exception("Cannot bin data this way yet.  Set bintime=None in your function call. \n")
+        omega_Earth = 7.27e-5
+        Nspw = u.shape[0]
+        Nchan= u.shape[1]
+        Nant = int(max(ant2))
+        
+        for i in range(Nspw):
+            for j in range(Nchan):
+                
+                # get list of baselines 
+                baselines = [[i , j] for i in range(max(Nant)) for j in range(i+1,max(Nant))]
+                for k in range(len(baselines)):
+                    these = (ant1[i,j,:] == baselines[k,0]) & (ant2[i,j,:] == baselines[k,1])
+                    uvdist= np.mean(u[i,j,these]**2+v[i,j,these]**2)
+                    dist_lambda = uvdist /wavelength[i,j]
+                    theta_FOV = 1.45e-4
+                    tau_avg = 1.0/(omega_Earth * dist_lambda * theta_FOV)
+                    
+                    inds2 = np.where(np.diff(time[these])>bintime)
+                    inds1 = 0
+        
+        return u , v , vis , sigma , ant1 , ant2
+        
+# ---------------------------------------------------------------------------
+
+    def concatenate_spws(self,filedirslist,outputdir,samechan=True):
+        '''
+        Accepts list of directories to binary data (fully reduced).
+        Joins multiple spectral windows together to make final dataset.
+        '''
+            
+        NUM_SPW = len(filedirslist)
+            
+        for i in range(NUM_SPW):
+            Dir = filedirslist[i]
+            if i ==0:
+                u = evil.load_binary(Dir+'u.bin')
+                v = evil.load_binary(Dir+'v.bin')
+                vis=evil.load_binary(Dir+'vis_chan_0.bin')
+                sig=evil.load_binary(Dir+'sigma_squared_inv.bin')
+                chan=evil.load_binary(Dir+'chan.bin')
+                ro1 =evil.load_binary(Dir+'ROWisone.bin')
+                co1 =evil.load_binary(Dir+'COLisone.bin')
+                rom1=evil.load_binary(Dir+'ROWisminusone.bin')
+                com1=evil.load_binary(Dir+'COLisminusone.bin')
+            else:
+                u = np.append(u,evil.load_binary(Dir+'u.bin'))
+                v = np.append(v,evil.load_binary(Dir+'v.bin'))
+                vis=np.append(vis,evil.load_binary(Dir+'vis_chan_0.bin'))
+                sig=np.append(sig,evil.load_binary(Dir+'sigma_squared_inv.bin'))
+                ro1 =np.append(ro1,evil.load_binary(Dir+'ROWisone.bin'))
+                co1 =np.append(co1,evil.load_binary(Dir+'COLisone.bin'))
+                rom1=np.append(rom1,evil.load_binary(Dir+'ROWisminusone.bin'))
+                com1=np.append(com1,evil.load_binary(Dir+'COLisminusone.bin'))
+                if samechan is True:
+                    chan=np.append(chan,evil.load_binary(Dir+'chan.bin'))
+                else:
+                    chan=np.append(chan,evil.load_binary(Dir+'chan.bin')+i)
+                    
+        evil.write_binary(u,outputdir+'u.bin')
+        evil.write_binary(v,outputdir+'v.bin')
+        evil.write_binary(vis,outputdir+'vis_chan_0.bin')
+        evil.write_binary(sig,outputdir+'sigma_squared_inv.bin')
+        evil.write_binary(chan,outputdir+'chan.bin')
+        evil.write_binary(ro1,outputdir+'ROWisone.bin')
+        evil.write_binary(co1,outputdir+'COLisone.bin')
+        evil.write_binary(rom1,outputdir+'ROWisminusone.bin')
+        evil.write_binary(com1,outputdir+'COLisminusone.bin')
+            
+        return
 # ---------------------------------------------------------------------------
         
     def get_antenna_coordinates(self, antennaconfig):

@@ -124,72 +124,121 @@ class GravitationalLens(object):
         self.kappa = (3.0-gamma)/2.0 *(self.ThetaE.value/np.sqrt(self.q*xprime**2+yprime**2/self.q))**(gamma-1)
         return
         
-    def build_kappa_from(self,NbodySim,evNbodySim,NX,NY,pixscale,n=1,n2=1):
+    def build_kappa_from(self,NbodySim,Np,mpart,bext,NX,NY,pixscale,n=1,n2=1,method='TCM'):
         '''
-        Read the outputs of an N-body simulation, assumes NbodySim is filename of the original positions of
-        particles in an N-body simulation, evNbodySim is evolved positions of particles in an N-body simulation.
+        Read the outputs of an N-body simulation, right now requires simulation parameters to be input, but
+        this could in principle be self determined.
         '''
         
         raise Exception('Cannot build from N-body simulation yet. \n')
         
-        x = np.loadtxt( NbodySim )
+        p = np.loadtxt( NbodySim )             # get variables p and ids, probably not this way
+        ids = np.loadtxt(ids).reshape([Np,Np,Np])
         
-        tesl = spatial.Delaunay(x)
+        # The following 20 lines are part of a notebook sent to me by Tom Abel that are
+        # used in the pre-processing of his simulations.  I'm not really sure what it is
+        # doing however, and it may not be a necessary step.
+        Ndim = Np**(0.33333333334)
+        x = bext[0]*(0.5+np.arange(Ndim))/(Ndim)
+        xg = np.meshgrid(x,x,x, indexing='ij')
+        xl = np.ravel(xg[0])
+        yl = np.ravel(xg[1])
+        zl = np.ravel(xg[2])
         
-        xn = np.loadtxt(evNbodySim)
+        dx = (p[:,0]-xl)
+        dy = (p[:,1]-yl)
+        dz = (p[:,2]-zl)
+        dis = np.sqrt(dx**2+dy**2+dz**2) 
+        (p[:,0])[dx < -bext[0]/2.0] += bext[0] # shift particles that arent in the box.
+        (p[:,1])[dy < -bext[1]/2.0] += bext[1]
+        (p[:,2])[dz < -bext[2]/2.0] += bext[2]
+        (p[:,0])[dx >  bext[0]/2.0] -= bext[0]
+        (p[:,1])[dy >  bext[1]/2.0] -= bext[1]
+        (p[:,2])[dz >  bext[2]/2.0] -= bext[2]
+        dx = (p[:,0]-xl)
+        dy = (p[:,1]-yl)
+        dz = (p[:,2]-zl)
+        dis = np.sqrt(dx**2+dy**2+dz**2)
         
-        # locate barycenters of tetrahedra
-        xc = xn[tesl.simplices[:,0],:]+xn[tesl.simplices[:,1],:]+xn[tesl.simplices[:,2],:]+xn[tesl.simplices[:,3],:]
- 
-        ### DO ###
-        # Add moment of inertia to get higher order approximation to the density 
-#        Q = np.zeros(tesl.shape[0],2,2)
-#        Q[:,0,0] = np.sum([xn[tesl.simplices[:,i],1]*xn[tesl.simplices[:,j],1]-xn[tesl.simplices[:,i],2]*xn[tesl.simplices[:,j],2] for i in range(4) for j in range(i+1)],axis=0)/10.0
-#        Q[:,1,0] = -np.sum([(1+i==j)*xn[tesl.simplices[:,i],0]*xn[tesl.simplices[:,i],1] for i in range(4) for j in range(4)],axis=0)/20.0
-#        Q[:,0,1] = -np.sum([(1+i==j)*xn[tesl.simplices[:,i],1]*xn[tesl.simplices[:,j],0] for i in range(4) for j in range(4)],axis=0)/20.0
-#        Q[:,1,1] = np.sum([xn[tesl.simplices[:,i],0]*xn[tesl.simplices[:,j],0]-xn[tesl.simplices[:,i],2]*xn[tesl.simplices[:,j],2] for i in range(4) for j in range(i+1)],axis=0)/10.0
+        # Define the Tetrahedra and their vertices for each cubic cell
+        vert = np.array(((0,0,0),(0,0,1),(0,1,0),(0,1,1),(1,0,0),(1,0,1),(1,1,0),(1,1,1)) )
+        conn = np.array(((1,0,2,4), (3,1,2,4), (3,5,1,4), (3,6,5,4), (3,2,6,4), (3,7,5,6)))
         
-        a = np.zeros(4*xc.shape[0],3)
-        a[::4,:] = np.sqrt(5)*xn[tesl.simplices[0],:]/5.0+(1-np.sqrt(5/5.0))*xc
-        a[1::4,:] = np.sqrt(5)*xn[tesl.simplices[0],:]/5.0+(1-np.sqrt(5/5.0))*xc
-        a[2::4,:] = np.sqrt(5)*xn[tesl.simplices[0],:]/5.0+(1-np.sqrt(5/5.0))*xc
-        a[3::4,:] = np.sqrt(5)*xn[tesl.simplices[0],:]/5.0+(1-np.sqrt(5/5.0))*xc
+        # Build the Tetrahedra
+        Ntetpp = len(conn)
+        Ntet = (Ndim-1)**3*Ntetpp
+        tet = np.zeros((Ntet,4),dtype=int)     # Tetrahedron member IDs
+        cen = np.zeros((Ntet,3))               # Tetrahedron center positions
+        m = np.zeros(Ntet,dtype=float)         # Tetrahedron masses (starts as volumes)
         
-        ### DO ###
-        # Change to Recursive TCM for arbitrary accuracy.  
+        for m in xrange(Ntetpp):
+            for n in xrange(4):
+                ip = vert[conn[m]][n,0]        # offset in the i dimension
+                jp = vert[conn[m]][n,1]        # offset in the j dimension
+                kp = vert[conn[m]][n,2]        # offset in the k dimension
+                
+                tet[m::Ntetpp,n] = idslist[ip:Ndim-1+ip,jp:Ndim-1+jp,kp:Ndim-1+kp].flatten()
         
-        # while tetrahedron extends multiple cells:
-        #       divide tetrahedron along longest axis
-        #       save number of divisions for each one
-        # compute new barycenters and their masses
+        # Locate barycenters of Tetrahedra
+        cen[:,:] = (p[tet[:,0],:]+p[tet[:,1],:]+p[tet[:,2],:]+p[tet[:,3],:])/4.0
         
-        #discard anything that falls outside of map
+        # Determine the Tetrahedron volumes
+        a = p[tet[:,0],:]-p[tet[:,3],:]
+        b = p[tet[:,1],:]-p[tet[:,3],:]
+        c = p[tet[:,2],:]-p[tet[:,3],:]
+        m[:] = mpart*np.fabs(np.sum(a*np.cross(b,c),axis=1)/6.0)
         
-        a = a[np.where((a[:,0])>np.min(self.x)) & (a[:,0]<np.max(self.x)) & (a[:,1]>np.min(self.y)) & (a[:,1]<np.max(self.y)),:]
+        # Clear space
+        a=0
+        b=0
+        c=0
         
-        # create grid used to deposit density
+        m /= np.prod(bext)/Ndim**3             # Normalize the masses     
+        
+        if method == 'TCM':
+            pass
+        elif method == 'T4PM':
+            a = np.zeros(4*xc.shape[0],3)
+            a[::4,:] = np.sqrt(5)*xn[tesl.simplices[0],:]/5.0+(1-np.sqrt(5/5.0))*xc
+            a[1::4,:] = np.sqrt(5)*xn[tesl.simplices[1],:]/5.0+(1-np.sqrt(5/5.0))*xc
+            a[2::4,:] = np.sqrt(5)*xn[tesl.simplices[2],:]/5.0+(1-np.sqrt(5/5.0))*xc
+            a[3::4,:] = np.sqrt(5)*xn[tesl.simplices[3],:]/5.0+(1-np.sqrt(5/5.0))*xc
+            cen = a
+        elif method =='RTCM':
+            raise Exception('No Recursive TCM yet \n')
+        else:
+            print('No method selected, assuming TCM \n')
+        
+        # Create grid used to deposit density
         self.setup_grid(NX=NX,NY=NY,pixscale=pixscale)
         self.x *= (np.pi*self.Dd/3600.0/180.0).to(units.Mpc).value
         self.y *= (np.pi*self.Dd/3600.0/180.0).to(units.Mpc).value
-        self.kappa = np.zeros(self.x.shape)
+        Sigma = np.zeros(self.x.shape)
         
-        # CIC interpolation to density grid for kappa
-
+        
+        # Discard anything that falls outside of map 
+        cen = cen[np.where((cen[:,0]>np.min(self.x)) & (cen[:,0]<np.max(self.x)) \
+                         & (cen[:,1]>np.min(self.y)) & (cen[:,1]<np.max(self.y))),:]
+        
+        # CIC interpolation to density grid for Sigma
         i = self.x[0,:].searchsorted(a[:,0])-1
         j = self.y[:,0].searchsorted(a[:,1])-1
-        dx= a[:,0]-self.x[0,i] 
-        dy= a[:,1]-self.y[j,0]
+        dx= cen[:,0]-self.x[0,i] 
+        dy= cen[:,1]-self.y[j,0]
         
         for k in xrange(0,len(i)):
-            self.kappa[i[k],j[k]]    += m*(1-dx[k])*(1-dy[k])/4.0
-            self.kappa[i[k]+1,j[k]]  += m * dx[k] * (1-dy[k])/4.0
-            self.kappa[i[k],j[k]+1]  += m * (1-dx[k]) * dy[k]/4.0
-            self.kappa[i[k]+1,j[k]+1]+= m * dx[ k ] * dy[ k ]/4.0
+            Sigma[i[k],j[k]]    += m*(1-dx[k])*(1-dy[k])/4.0
+            Sigma[i[k]+1,j[k]]  += m * dx[k] * (1-dy[k])/4.0
+            Sigma[i[k],j[k]+1]  += m * (1-dx[k]) * dy[k]/4.0
+            Sigma[i[k]+1,j[k]+1]+= m * dx[ k ] * dy[ k ]/4.0
         
-        self.kappa *= units.solMass/units.Mpc**2
-        self.kappa /= self.SigmaCrit
+        Sigma *= units.solMass/units.Mpc**2
+        self.kappa = (Sigma/self.SigmaCrit).decompose().value
         self.x /= np.pi*self.Dd/3600.0/180.0
         self.y /= np.pi*self.Dd/3600.0/180.0
+        
+        print('kappa built successfully')
+        return
         
 # ----------------------------------------------------------------------
        
@@ -388,8 +437,8 @@ class GravitationalLens(object):
             
                         
             else:
-                print('you must choose a valid method of integration')
-                print('your deflection angles will not be correct')
+                print('you must choose a valid method of deflection')
+                print(' your deflection angles will not be correct ')
             
             self.alpha_x = alpha_x
             self.alpha_y = alpha_y
@@ -402,7 +451,7 @@ class GravitationalLens(object):
     
 # ----------------------------------------------------------------------    
     
-    def plot(self,mapname, caustics=True,Ngridlines=100,xlim=None,ylim=None,figscale=1):    
+    def plot(self,mapname, caustics=True,critical_curves=True,Ngridlines=100,xlim=None,ylim=None,figscale=1):    
         '''
         Plot the given map as a nice colorscale image, with contours if need be.
         '''
@@ -499,8 +548,8 @@ class GravitationalLens(object):
                            hspace=0.1)
         
         
-        # 2) The cubehelix map is linear grayscale on a BW printer
-        options['cmap'] = plt.get_cmap('cubehelix')
+        # 2) The viridis map is linear grayscale on a BW printer
+        options['cmap'] = plt.get_cmap('viridis')
 
         
         # Start the figure:
@@ -554,8 +603,18 @@ class GravitationalLens(object):
                 for i in range(img.shape[0]):
                     img_new[:,:,i] = img[i,:,:]
                 plt.imshow(img_new, **options)
+                
             else:
                 raise Exception("Cannot plot multiwavelength images yet.\n")
+                
+            if critical_curves is True:
+                jxy,jxx = np.gradient(self.beta_x)
+                jyy,jyx = np.gradient(self.beta_y)
+                A = jxx*jyy-jxy*jyx
+                
+                plt.contour(self.image_x,self.image_y,A,levels=[0],colors='r')
+            plt.xlabel('x / arcsec')
+            plt.ylabel('y / arcsec')
         
         elif mapname == "non-lensed image":
             
@@ -576,11 +635,17 @@ class GravitationalLens(object):
             plt.ylabel('y / arcsec')
             
             if caustics is True:
-                pixstep1 = self.beta_x.shape[0]//Ngridlines
-                pixstep2 = self.beta_x.shape[1]//Ngridlines
-                for i in range(Ngridlines):
-                    plt.plot(self.beta_x[pixstep1*i,:],self.beta_y[pixstep1*i,:],'r-',linewidth=0.1)
-                    plt.plot(self.beta_x[:,pixstep2*i],self.beta_y[:,pixstep2*i],'r-',linewidth=0.1)
+                
+                jxy,jxx = np.gradient(self.beta_x)
+                jyy,jyx = np.gradient(self.beta_y)
+                A = jxx*jyy-jyx*jxy
+                plt.contour(self.beta_x,self.beta_y,A,levels=[0],colors='r')
+                
+                #pixstep1 = self.beta_x.shape[0]//Ngridlines
+                #pixstep2 = self.beta_x.shape[1]//Ngridlines
+                #for i in range(Ngridlines):
+                #    plt.plot(self.beta_x[pixstep1*i,:],self.beta_y[pixstep1*i,:],'r-',linewidth=0.1)
+                #    plt.plot(self.beta_x[:,pixstep2*i],self.beta_y[:,pixstep2*i],'r-',linewidth=0.1)
                 
                 #plt.scatter(self.beta_x[::10,::10],self.beta_y[::10,::10], s=0.001)
                 plt.xlim(np.min(self.source.beta_x),np.max(self.source.beta_x))
