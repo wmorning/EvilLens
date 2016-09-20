@@ -59,9 +59,15 @@ class Saboteur(object):
         Creates the visibilities, and attaches everything to the correct
         location in the object.  Meant to simulate the read_data_from 
         function but without having to use CASA.
+        
+        
+        TO DO: Build the u and v list from the antenna configuration file. 
+        This will require some edits to the get_antenna_coordinates
+        function that will disturb other functionality.  Leave as it is for 
+        now.
         '''
         
-        assert isclass(type(lens),evil.GravitationalLens)
+        assert issubclass(type(lens),evil.GravitationalLens)
         
         if (type(u) == str):
             self.u = evil.load_binary(u)
@@ -81,6 +87,8 @@ class Saboteur(object):
         
         for i in range(len(u)):
             vis[i] = np.sum(lens.image * np.exp( -2j*np.pi *(x*self.u[i] +y*self.v[i])))
+        
+        self.Visibilities = vis
         
         self.get_antenna_coordinates(antennaconfig)
         
