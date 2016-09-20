@@ -91,7 +91,7 @@ class AnalyticSIELens(evil.GravitationalLens):
             alpha_x_prime = self.b.value*np.cos(phi)
             alpha_y_prime = self.b.value*np.sin(phi)         
         else:
-            if self.r_c is not None:
+            if not np.isclose(self.r_c,0):
                 raise Exception("cannot include core radius yet\n")
                 x1 = xprime 
                 x2 = yprime
