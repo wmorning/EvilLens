@@ -65,8 +65,10 @@ class Saboteur(object):
         
         if (type(u) == str):
             self.u = evil.load_binary(u)
+            self.u /= self.wavelength
         if (type(v) == str):
             self.v = evil.load_binary(v)
+            self.v /= self.wavelength
         if (type(ant1) == str):
             self.ant1 = evil.load_binary(ant1)
         if (type(ant2) == str):
