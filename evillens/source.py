@@ -21,6 +21,7 @@ class Source(object):
     
         self.Zs = Zs
         self.compute_distances()
+        self.setup_grid(NX=100,NY=100,pixscale=0.1)
     
         return    
 # ----------------------------------------------------------------------
@@ -176,9 +177,9 @@ class Source(object):
         
         for i in range(self.Nclumps):
             if i==0:
-                self.intensity = (1.0/np.sqrt(2*np.pi*self.Slist[i]**2))*np.exp(-0.5*((self.beta_x-self.xlist[i])**2+(self.beta_y-self.ylist[i])**2)/self.Slist[i]**2)
+                self.intensity = (1.0/np.sqrt(2*np.pi))*np.exp(-0.5*((self.beta_x-self.xlist[i])**2+(self.beta_y-self.ylist[i])**2)/self.Slist[i]**2)
             else:
-                self.intensity +=(1.0/np.sqrt(2*np.pi*self.Slist[i]**2))*np.exp(-0.5*((self.beta_x-self.xlist[i])**2+(self.beta_y-self.ylist[i])**2)/self.Slist[i]**2)
+                self.intensity +=(1.0/np.sqrt(2*np.pi))*np.exp(-0.5*((self.beta_x-self.xlist[i])**2+(self.beta_y-self.ylist[i])**2)/self.Slist[i]**2)
         
 
         self.intensity *= np.exp(-self.b_n*((np.sqrt((np.cos(self.orientation)*(self.beta_x-self.center[0])+np.sin(self.orientation)*(self.beta_y-self.center[1]))**2*self.axis_ratio+(-(self.beta_x-self.center[0])*np.sin(self.orientation)+(self.beta_y-self.center[1])*np.cos(self.orientation))**2/self.axis_ratio)/self.size)**(1/self.n)-1))        
