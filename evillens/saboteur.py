@@ -82,8 +82,8 @@ class Saboteur(object):
             
         self.u = u
         self.v = v
-        self.ant1 = ant1
-        self.ant2 = ant2
+        self.antenna1 = ant1
+        self.antenna2 = ant2
         
         x = lens.image_x / 3600. / 180. * np.pi
         y = lens.image_y / 3600. / 180. * np.pi
@@ -795,7 +795,8 @@ class Saboteur(object):
         
     def assign_phases_to_antennas(self , v , fast = False , cellsize = 10.0 , \
                                     convolution = False , randseed = 1 ):
-        if self.phases is None or v != self.velocity:                                
+        if self.phases is None or v != self.velocity:
+            print( "getting phases" )                                
             self.get_phases(v,fast,cellsize,convolution,randseed)
         
         f_interp = interpolate.RectBivariateSpline(self.phasecoords_y,self.phasecoords_x,self.phases,kx=1,ky=1)
@@ -820,7 +821,7 @@ class Saboteur(object):
         of their antennas.  This step is performed for several time steps, between
         which the phase screen is translated.  For simplicity, the
         translation will always be in the x-direction
-        -v determines the rate at which the phase grid translates.
+        -v determines the rate at which the phase grid translates, in 
         -cellsize is size of phase cells (in meters).
         -convolution flags whether a user wants to convolve the phase screen with
             the 12m size of ALMA antennas.
