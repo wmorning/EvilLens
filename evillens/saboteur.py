@@ -82,8 +82,8 @@ class Saboteur(object):
             
         self.u = u
         self.v = v
-        self.antenna1 = ant1
-        self.antenna2 = ant2
+        self.antenna1 = np.rint(ant1).astype(int)
+        self.antenna2 = np.rint(ant2).astype(int)
         
         x = lens.image_x / 3600. / 180. * np.pi
         y = lens.image_y / 3600. / 180. * np.pi
