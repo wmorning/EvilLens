@@ -958,22 +958,22 @@ class Saboteur(object):
         
         # have the matrices we want, now write to data.
         f = open(str(datadir)+'ROWisone.bin','wb')
-        data = struct.pack('i'*len(rowisone),*rowisone)
+        data = struct.pack('d'*len(rowisone),*rowisone)
         f.write(data)
         f.close()
         
         g = open(str(datadir)+'COLisone.bin','wb')
-        data = struct.pack('i'*len(colisone),*colisone)
+        data = struct.pack('d'*len(colisone),*colisone)
         g.write(data)
         g.close()
         
         h = open(str(datadir)+'ROWisminusone.bin','wb')
-        data = struct.pack('i'*len(rowisminusone),*rowisminusone)
+        data = struct.pack('d'*len(rowisminusone),*rowisminusone)
         h.write(data)
         h.close()
         
         i = open(str(datadir)+'COLisminusone.bin','wb')
-        data = struct.pack('i'*len(colisminusone),*colisminusone)
+        data = struct.pack('d'*len(colisminusone),*colisminusone)
         i.write(data)
         i.close()
     
