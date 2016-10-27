@@ -654,7 +654,7 @@ def Plot_Subhalos(directory,SubFilesList,xlist=None,ylist=None,Ncols=3, \
     return fig
     
 def Plot_All( visdatadir , vismod , srcmod , imgmod , src_L , Npix_s , imL  , Npix_L , Npix_img \
-                , src_cent=[0,0] , img_cent =[0,0] , Flipped=True , figscale=1  \
+                , src_cent=[0,0] , img_cent =[0,0] , dirty_image_size = None, Flipped=True , figscale=1  \
                 , caustics=False , Causticx = None, Causticy=None , SNR=False , SNRcut=3.0 , srcerr=None,title=None):
     '''
     A plot that includes the dirty map, predicted map, residuals, lensmodel, and source reconstruction.
@@ -699,8 +699,14 @@ def Plot_All( visdatadir , vismod , srcmod , imgmod , src_L , Npix_s , imL  , Np
     ## Create dirty image, model, and residuals
     
     # Set up pixel grids
-    x = np.linspace(img_cent[0]-imL/2.0,img_cent[0]+imL/2.0,Npix_L)
-    y = np.linspace(img_cent[1]-imL/2.0,img_cent[1]+imL/2.0,Npix_L)
+    if dirty_image_size is None:
+        DIS = imL
+        x = np.linspace(img_cent[0]-imL/2.0,img_cent[0]+imL/2.0,Npix_L)
+        y = np.linspace(img_cent[1]-imL/2.0,img_cent[1]+imL/2.0,Npix_L)
+    else:
+        DIS = dirty_image_size
+        x = np.linspace(img_cent[0]-DIS/2.0,img_cent[0]+DIS/2.0,Npix_L)
+        y = np.linspace(img_cent[1]-DIS/2.0,img_cent[1]+DIS/2.0,Npix_L)
         
     # convert to radians
     x /=(3600*180/np.pi)
@@ -734,9 +740,9 @@ def Plot_All( visdatadir , vismod , srcmod , imgmod , src_L , Npix_s , imL  , Np
     
     # setup figure
     
-    fig = plt.figure(figsize=[27.5/4.0*figscale,7.5/4.0*figscale])
+    fig = plt.figure(figsize=[27.5/4.0*figscale,8.5/4.0*figscale])
     gs = gridspec.GridSpec(1,5)
-    gs.update(left=0.05,right=0.95,bottom=0.05,top=0.95,wspace=0.03)
+    gs.update(left=0.05,right=0.95,bottom=0.075,top=0.99,wspace=0.03)
     
     
     ## First figure panel
@@ -756,13 +762,13 @@ def Plot_All( visdatadir , vismod , srcmod , imgmod , src_L , Npix_s , imL  , Np
     # create figure
     ax1 = plt.subplot(gs[0,0])
     dirty_map = plt.imshow(img_da,**options)
-    plt.contour(x-(imL)/2.6,y-(imL)/2.6,DBeam,levels=[np.max(DBeam)/2.0],colors='k',linewidth=1.5)
+    plt.contour(x-(DIS)/2.6,y-(DIS)/2.6,DBeam,levels=[np.max(DBeam)/2.0],colors='k',linewidth=1.5)
     plt.xlim(np.min(x),np.max(x))
     plt.ylim(np.min(y),np.max(y))
     plt.xticks([])
     plt.yticks([])
     ax1.text((np.min(x)+np.max(x))/2.0,(np.min(y)+np.max(y))/2.0+(np.max(y)-np.min(y))/2.5,'Dirty Map',fontsize=6.0*figscale,bbox={'color':'white','alpha':0.5},horizontalalignment='center',verticalalignment='center')
-    cax1 = fig.add_axes([0.05,0.12,0.175,0.05])
+    cax1 = fig.add_axes([0.05,0.17,0.175,0.05])
     cbar1 = plt.colorbar(dirty_map,cax=cax1,label='Flux (Jy / str)',orientation='horizontal')
     cbar1.set_label('Flux (Jy / Beam)',fontsize=6.0*figscale)
     ## Second figure panel
@@ -776,7 +782,7 @@ def Plot_All( visdatadir , vismod , srcmod , imgmod , src_L , Npix_s , imL  , Np
     ax2.text((np.min(x)+np.max(x))/2.0,(np.min(y)+np.max(y))/2.0+(np.max(y)-np.min(y))/2.5,'Predicted Map',fontsize=6.0*figscale,bbox={'color':'white','alpha':0.5},horizontalalignment='center',verticalalignment='center')
     plt.yticks([])
     plt.xticks([])
-    cax2 = fig.add_axes([0.23125,0.12,0.175,0.05])
+    cax2 = fig.add_axes([0.23125,0.17,0.175,0.05])
     cbar2 = plt.colorbar(predicted_map,cax=cax2,label='Flux (Jy / str)',orientation='horizontal')
     cbar2.set_label('Flux (Jy / Beam)',fontsize=6.0*figscale)
     ## Third figure panel
@@ -785,16 +791,17 @@ def Plot_All( visdatadir , vismod , srcmod , imgmod , src_L , Npix_s , imL  , Np
     # create figure
     ax3 = plt.subplot(gs[0,2])
     residual = plt.imshow(img_da-img_mo,**options)
-    plt.contour(x,(-2*Flipped+1)*y,(img_da-img_mo)/np.std(img_da-img_mo),colors='r',levels=[2,4,6],linestyles='-')
-    plt.contour(x,(-2*Flipped+1)*y,(img_da-img_mo)/np.std(img_da-img_mo),colors='r',levels=[-6,-4,-2],linestyles='--')
+    plt.contour(x,np.flipud(y),(img_da-img_mo)/np.std(img_da-img_mo),colors='r',levels=[2,4,6],linestyles='-')
+    plt.contour(x,np.flipud(y),(img_da-img_mo)/np.std(img_da-img_mo),colors='r',levels=[-6,-4,-2],linestyles='--')
     plt.xlim(np.min(x),np.max(x))
     plt.ylim(np.min(y),np.max(y))
     ax3.text((np.min(x)+np.max(x))/2.0,(np.min(y)+np.max(y))/2.0+(np.max(y)-np.min(y))/2.5,'Residuals',fontsize=6.0*figscale,bbox={'color':'white','alpha':0.5},horizontalalignment='center',verticalalignment='center')
     plt.yticks([])
     plt.xticks([])
-    cax3 = fig.add_axes([0.4125,0.12,0.175,0.05])
+    cax3 = fig.add_axes([0.4125,0.17,0.175,0.05])
     cbar3 = plt.colorbar(residual,cax=cax3,label='Flux (Jy / str)',orientation='horizontal')
     cbar3.set_label('Flux (Jy / Beam)',fontsize=6.0*figscale)
+    
     ## Fourth figure panel
     
     # new plotting options
@@ -829,9 +836,10 @@ def Plot_All( visdatadir , vismod , srcmod , imgmod , src_L , Npix_s , imL  , Np
     ax4.set_yticklabels([])
     plt.yticks([])
     plt.xticks([])
-    cax4 = fig.add_axes([0.59375,0.12,0.175,0.05])
+    cax4 = fig.add_axes([0.59375,0.17,0.175,0.05])
     cbar4 = plt.colorbar(Skymodel,cax=cax4,label='Flux (Jy / str)',orientation='horizontal')
     cbar4.set_label('Flux (Jy / str)',fontsize=6.0*figscale)
+    cbar4.ax.set_xticklabels(cbar4.ax.get_xticklabels(),rotation=45)
     # Fifth figure panel
     
     # new plotting options
@@ -864,9 +872,10 @@ def Plot_All( visdatadir , vismod , srcmod , imgmod , src_L , Npix_s , imL  , Np
     ax5.set_yticklabels([])
     plt.yticks([])
     plt.xticks([])
-    cax5 = fig.add_axes([0.775,0.12,0.175,0.05])
+    cax5 = fig.add_axes([0.775,0.17,0.175,0.05])
     cbar5 = plt.colorbar(srcplot,cax=cax5,label='Flux (Jy / str)',orientation='horizontal')
     cbar5.set_label('Flux (Jy / str)',fontsize=6.0*figscale)
+    cbar5.ax.set_xticklabels(cbar5.ax.get_xticklabels(),rotation=45)
     # add colorbar
     #cax = fig.add_axes([0.92,0.2,0.02,0.62])
     #cbar = plt.colorbar(srcplot,cax=cax,label='Flux (Jy / str)')
@@ -1169,6 +1178,7 @@ def Compare_Forecasts(Fisherlist,params,param_IDs,MCMC=None,figscale=1,mean_subt
                     
                     if i+1 == num_panels:
                         plt.xticks(xlabels,rotation=45)
+                        plt.xlabel(Paramlabels[param_IDs[i]],fontsize=10*figscale)
                     else:
                         plt.xticks(xlabels,[])
                     plt.yticks([])
