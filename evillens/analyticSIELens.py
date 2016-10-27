@@ -218,7 +218,7 @@ class AnalyticSIELens(evil.GravitationalLens):
         imTheta = np.arctan2(self.image_y-self.centroid[1],self.image_x-self.centroid[0])
         
         for i in range(Nmoments):
-            m = i+2  # The first multipole is m=2 (shear)
+            m = float(i+2)  # The first multipole is m=2 (shear)
             if m == 2:
                 
                 Am = M[i,0] 
@@ -252,6 +252,8 @@ class AnalyticSIELens(evil.GravitationalLens):
                 # add shear to current deflection angles
                 self.alpha_x -= alphaX 
                 self.alpha_y -= alphaY 
+                
+                self.kappa += 0.5*(np.gradient(alphaX,self.pixscale)[1]+np.gradient(alphaY,self.pixscale)[0])
             
         self.Multipoles = M
         
