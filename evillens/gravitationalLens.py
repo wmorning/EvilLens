@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from scipy import interpolate, spatial
 from scipy.integrate import simps
 from time import time
+import evillens as evil
 
 # ======================================================================
 
@@ -30,6 +31,7 @@ class GravitationalLens(object):
         self.alpha_x = None
         self.alpha_y = None
         self.kappa = None
+        self.source = evil.Source(self.Zs)
 
         # Calculate distances and the critical density:
         self.cosmological = FlatLambdaCDM(H0=71.0, Om0=0.2669)
@@ -743,9 +745,9 @@ class GravitationalLens(object):
                 f_interpolation = interpolate.RectBivariateSpline(self.source.beta_y[:,0],self.source.beta_x[0,:],self.source.intensity,kx=1,ky=1)            
             
                 #interpolate for observed intensity at each angle            
-                for i in range(len(self.image[:,0])):
-                    for j in range(len(self.image[0,:])):                    
-                       self.image[i,j] = f_interpolation(self.beta_y[i,j],self.beta_x[i,j])
+                for i in range(self.beta_x.shape[0]):
+                    for j in range(self.beta_x.shape[1]):                   
+                        self.image[i,j] = f_interpolation(self.beta_y[i,j],self.beta_x[i,j])
                 
             else:   #multiwavelength data cube
                 self.image = np.empty([self.source.Naxes,self.NY//self.n,self.NX//self.n], float)
