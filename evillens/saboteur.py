@@ -12,6 +12,7 @@ from scipy import interpolate
 import matplotlib.pyplot as plt
 import subprocess
 import struct
+import os
 from scipy.interpolate import interp1d
 import astropy.convolution as astconv
 try:
@@ -166,6 +167,10 @@ class Saboteur(object):
                 fileContent = file.read()
                 self.antenna2 = np.array(struct.unpack("d"*(len(fileContent)//8),fileContent))
             file.close()
+            
+        # convert antenna IDs to integer for indexing
+        self.antenna1 = np.rint(self.antenna1).astype(int)
+        self.antenna2 = np.rint(self.antenna2).astype(int)
         
         #get list of antenna coordinates using location given in casapath
         self.get_antenna_coordinates(antennaconfig)
@@ -180,17 +185,45 @@ class Saboteur(object):
         outside of CASA).  This should be regarded as the first step in the 
         process of reducing the data, as the sigmas should still be scaled, and
         the dOdphase matrices should still be built.
+        
+        Takes:
+        
+        measurementset - The name of the CASA measurement set to be converted
+        
+        filedir        - The location to which the files will be written.
+        
+        Returns:
+        
+        Nchannels      - The number of channels in the measurement set
+        
+        Nspw           - The number of spectral windows in the ms.
         '''
         
+        # CASA script to get number of SPWs and channels.
         script1 = ['ms.open({0})'.format(measurementset), \
                 'recD = ms.getdata(["axis_info"])', 'aD = recD["axis_info"]["freq_axis"]["chan_freq"]', \
                 'print(len(aD))','print(len(aD[0]))']
                 
         casa = drivecasa.Casapy()
         temp = casa.run_script(script1)
-        Nchannels = int(temp[0][7])
-        Nspw = int(temp[0][10])
-                   
+        
+        # Fool proof get spectral windows and channels.
+        Nchanknown = False
+        for i in range(len(temp[0])):
+            if Nchanknown is False:
+                try:
+                    Nchannels = int(temp[0][i])
+                    Nchanknown = True
+                except:
+                    continue
+            else:
+                try:
+                    Nspw = int(temp[0][i])
+                else:
+                    continue
+        
+        
+        # CASA script to write all data to binary.           
         main_script = ['from array import array' , 'import struct', 'import numpy as np', \
                 'WritebaseName={0}'.format(str(filedir)),'print(WritebaseName)','ms.open({0})'.format(measurementset), \
                 'recD = ms.getdata(["data","axis_info"])','aD=recD["data"]', \
@@ -242,40 +275,66 @@ class Saboteur(object):
                 
         
         temp = casa.run_script(main_script)
-        #for i in range(len(main_script)):
-        #    print(main_script[i])
-        print temp
-        print("Measurement set written as binary \n")
+        
+        print temp  # Parse for errors.
+        print("Measurement set converted to binary.  Data written to:  {0} \n".format(filedir))
         return Nchannels , Nspw
         
 # ---------------------------------------------------------------------------
 
     def get_sigma_scaling(self,u,v,vis,sigma):
+        '''
+        Given a set of data with unscaled errors, determine the scaling
+        necessary to make the errors indicative of the data.
+        
+        Takes:
+        
+        - u (in meters):  The u coordinates of the data
+        
+        - v (in meters):  The v coordinates of the data
+        
+        - vis (in mJy):  The visibility data (in complex array format)
+        
+        - sigma (Arbitrary):  The unscaled noise expectation for each
+        visibility (real array format).
+        
+        Returns:
+        
+        SIGMA_SCALING:  The number to scale the noise to the 
+        correct level.
+        
+        '''
         
         UVMAX = np.max([abs(u),abs(v)])*1.01
 
         Nbins = 256
         
+        # Count number of visibilities in each bin.
         Bins = np.arange(-UVMAX,UVMAX+12,12.0)
         P,reject1,reject2 = np.histogram2d(u,v,bins=Bins)
         
 #        B1 = interp1d(Bins,range(Nbins),'nearest')
 #        iB1 = B1(u)
 #        iB2 = B1(v)
-
+        
+        # Keep only bins with visiblities in them.
         [row,col] = np.where(P!=0)
-        A_recovered = np.zeros(P.shape)
-        B_recovered = np.zeros(P.shape)
 
+        # Keep track of noise estimation stats
+        NumSkippedBins = 0
+        total=0 
+        
+        # Real and imaginary noise arrays.
         noise_r = np.zeros(u.shape)
         noise_i = np.zeros(v.shape)
         
         indI = np.zeros(u.shape,int)
-        total=0
+
         for icount in range(len(row)):
             inds = np.where((v>=Bins[col[icount]])&(v<Bins[col[icount]+1])&(u>=Bins[row[icount]])&(u<Bins[row[icount]+1]))[0]
             
             if len(inds) ==1:
+                NumSkippedBins += 1
                 continue
             elif len(inds)%2 ==1:
                 inds = inds[:-1]
@@ -291,7 +350,10 @@ class Saboteur(object):
         N = len(iI)
         SIGMA_SCALING = np.sqrt(N/np.sum((noise_r[iI]/np.sqrt(sigma[iI]**2+sigma[indI[iI]]**2))**2)) 
         
-        return SIGMA_SCALING
+        print "Total number of visibilities used was", total 
+        print NumSkippedBins , "bins out of" , len(row), "had only one visibility and were skipped."
+        
+        return SIGMA_SCALING 
         
 
 # ---------------------------------------------------------------------------
@@ -357,6 +419,13 @@ class Saboteur(object):
         OUTPUTDIR. 
         '''
         
+        # Create the destination if it does not already exist.
+        if not os.path.isdir(OUTPUTDIR):
+            os.mkdir(OUTPUTDIR)
+        
+        
+        # Create the temporary directory for exerything.
+        print "Performing first conversion to binary."
         Nchan, Nspw = self.ms_to_bin(MSNAME, '"/Users/wmorning/research/data/temp/"')
         
         Vis , ssqinv , u , v , rowisone , colisone , rowisminusone , colisminusone , chan  = \
@@ -420,7 +489,7 @@ class Saboteur(object):
         elif len(wav.shape)==1:
             wav = np.array([wav])    # bug fix for single spw case
         
-        
+        print("Loading data located at:  {0}".format(direct))
         #  load all of the data (all channels, all spws)
         for i in range(Nspw):
             for j in range(Nchan):
@@ -429,8 +498,8 @@ class Saboteur(object):
                     vt = evil.load_binary(direct+'v_spw_0_chan_0.bin')
                     vist = evil.load_binary(direct+'vis_spw_0_chan_0.bin')
                     sigmat = evil.load_binary(direct+'sigma_spw_0_chan_0.bin')
-                    ant1t = evil.load_binary(direct+'ant_1.bin')
-                    ant2t = evil.load_binary(direct+'ant_2.bin')
+                    ant1t = np.rint(evil.load_binary(direct+'ant_1.bin')).astype(int)
+                    ant2t = np.rint(evil.load_binary(direct+'ant_2.bin')).astype(int)
                     timet = evil.load_binary(direct+'time.bin')
                     u     = np.zeros([Nspw,Nchan,   len(ut)   ], float )
                     v     = np.zeros([Nspw,Nchan,   len(vt)   ], float )
@@ -465,8 +534,8 @@ class Saboteur(object):
                     vist  = evil.load_binary(direct+'vis_spw_{0}_chan_{1}.bin'.format(i,j))
                     vis[i,j,:] = vist[::2]+1j*vist[1::2]
                     sigma[i,j,:]= evil.load_binary(direct+'sigma_spw_{0}_chan_{1}.bin'.format(i,j))
-                    ant1[i,j,:] = evil.load_binary(direct+'ant_1.bin')
-                    ant2[i,j,:] = evil.load_binary(direct+'ant_2.bin')
+                    ant1[i,j,:] = np.rint(evil.load_binary(direct+'ant_1.bin')).astype(int)
+                    ant2[i,j,:] = np.rint(evil.load_binary(direct+'ant_2.bin')).astype(int)
                     chan[i,j,:] +=j+Nchan*i
                     sigmascl = self.get_sigma_scaling(u[i,j,:],v[i,j,:],vis[i,j,:],sigma[i,j,:])
                     sigma[i,j,:] /= sigmascl
@@ -481,8 +550,8 @@ class Saboteur(object):
          
         print "building dOdphase \n"
         
-        ant1 = ant1.flatten()
-        ant2 = ant2.flatten()
+        ant1 = np.rint(ant1.flatten()).astype('int')
+        ant2 = np.rint(ant2.flatten()).astype('int')
         time = time.flatten()
         rowisone,colisone,rowisminusone,colisminusone = self.build_dOdphase(ant1,ant2,time,NUM_TIME_STEPS)
         print "dOdphase built, writing data to disk"
