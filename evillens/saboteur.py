@@ -219,7 +219,7 @@ class Saboteur(object):
             else:
                 try:
                     Nspw = int(temp[0][i])
-                else:
+                except:
                     continue
         
         
