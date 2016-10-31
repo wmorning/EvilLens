@@ -432,7 +432,7 @@ class Saboteur(object):
         Nchan, Nspw = self.ms_to_bin(MSNAME, '"{0}"'.format(OUTPUTDIR+'temp'))
         
         Vis , ssqinv , u , v , rowisone , colisone , rowisminusone , colisminusone , chan  = \
-                self.prepare_data(OUPTUTDIR+'temp/',Nspw,Nchan,NUM_TIME_STEPS=NUM_TIME_STEPS)
+                self.prepare_data(OUTPUTDIR+'temp/',Nspw,Nchan,NUM_TIME_STEPS=NUM_TIME_STEPS)
                 
         with open(OUTPUTDIR+'vis_chan_0.bin','wb') as file:
             data = struct.pack('d'*len(Vis),*Vis)
