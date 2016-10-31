@@ -428,7 +428,8 @@ class Saboteur(object):
         
         # Create the temporary directory for exerything.
         print "Performing first conversion to binary."
-        Nchan, Nspw = self.ms_to_bin(MSNAME, '{0}+"temp/"'.format(OUTPUTDIR))
+        
+        Nchan, Nspw = self.ms_to_bin(MSNAME, '"{0}"'.format(OUTPUTDIR+'temp'))
         
         Vis , ssqinv , u , v , rowisone , colisone , rowisminusone , colisminusone , chan  = \
                 self.prepare_data(OUPTUTDIR+'temp/',Nspw,Nchan,NUM_TIME_STEPS=NUM_TIME_STEPS)
