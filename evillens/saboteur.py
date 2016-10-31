@@ -423,13 +423,15 @@ class Saboteur(object):
         if not os.path.isdir(OUTPUTDIR):
             os.mkdir(OUTPUTDIR)
         
+        if not os.path.isdir(OUTPUTDIR+'temp'):
+            os.mkdir(OUTPUTDIR+'temp')
         
         # Create the temporary directory for exerything.
         print "Performing first conversion to binary."
-        Nchan, Nspw = self.ms_to_bin(MSNAME, '"/Users/wmorning/research/data/temp/"')
+        Nchan, Nspw = self.ms_to_bin(MSNAME, '{0}+"temp/"'.format(OUTPUTDIR))
         
         Vis , ssqinv , u , v , rowisone , colisone , rowisminusone , colisminusone , chan  = \
-                self.prepare_data('/Users/wmorning/research/data/temp/',Nspw,Nchan,NUM_TIME_STEPS=NUM_TIME_STEPS)
+                self.prepare_data(OUPTUTDIR+'temp/',Nspw,Nchan,NUM_TIME_STEPS=NUM_TIME_STEPS)
                 
         with open(OUTPUTDIR+'vis_chan_0.bin','wb') as file:
             data = struct.pack('d'*len(Vis),*Vis)
@@ -475,6 +477,13 @@ class Saboteur(object):
             data = struct.pack('d'*len(colisminusone),*colisminusone)
             file.write(data)
         file.close()
+        
+        # Clean up (remove temporary files)
+        garbagelist = os.listdir(OUTPUTDIR+'temp')
+        for i in range(len(garbagelist)):
+            os.remove(OUTPUTDIR+'temp'+garbagelist[i])
+        os.rmdir(OUTPUTDIR+'temp')
+        
 
         print 'Data written to {0}'.format(OUTPUTDIR)
         
