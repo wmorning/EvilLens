@@ -744,10 +744,16 @@ class GravitationalLens(object):
                 #create bilinear interpolation function (assumes uniform grid of x,y)
                 f_interpolation = interpolate.RectBivariateSpline(self.source.beta_y[:,0],self.source.beta_x[0,:],self.source.intensity,kx=1,ky=1)            
             
-                #interpolate for observed intensity at each angle            
-                for i in range(self.beta_x.shape[0]):
-                    for j in range(self.beta_x.shape[1]):                   
-                        self.image[i,j] = f_interpolation(self.beta_y[i,j],self.beta_x[i,j])
+                #interpolate for observed intensity at each angle   
+                self.image = f_interpolation.ev(self.beta_y.ravel(),self.beta_x.ravel()).reshape([self.NY//self.n,self.NX//self.n])
+                
+                # outside the source plane, the image must be 0
+                self.image[np.where(self.beta_x<np.min(self.source.beta_x))] = 0
+                self.image[np.where(self.beta_x>np.max(self.source.beta_x))] = 0
+                self.image[np.where(self.beta_y<np.min(self.source.beta_y))] = 0
+                self.image[np.where(self.beta_y>np.max(self.source.beta_y))] = 0
+                         
+                
                 
             else:   #multiwavelength data cube
                 self.image = np.empty([self.source.Naxes,self.NY//self.n,self.NX//self.n], float)
@@ -757,9 +763,11 @@ class GravitationalLens(object):
                     
                     self.image[i,:,:] = f_interpolation.ev(self.beta_y.flatten(),self.beta_x.flatten()).reshape([self.NY//self.n,self.NX//self.n])
                     
-#                    for k in range(self.NX//self.n):
-#                        for j in range(self.NY//self.n):
-#                            self.image[i,j,k] = f_interpolation(self.beta_y[j,k],self.beta_x[j,k])
+                    # outside the source plane, the image must be 0
+                    self.image[np.where(self.beta_x<np.min(self.source.beta_x))] = 0
+                    self.image[np.where(self.beta_x>np.max(self.source.beta_x))] = 0
+                    self.image[np.where(self.beta_y<np.min(self.source.beta_y))] = 0
+                    self.image[np.where(self.beta_y>np.max(self.source.beta_y))] = 0
                             
         return
 
