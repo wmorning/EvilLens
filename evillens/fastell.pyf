@@ -1,0 +1,36 @@
+!    -*- f90 -*-
+! Note: the context of this file is case sensitive.
+
+python module _fastell ! in
+    interface  ! in :_fastell
+
+        subroutine fastelldefl(x1in,x2in,q,gam,arat,s2,defl) ! in :fastell:src/fastell.f
+            double precision :: x1in
+            double precision :: x2in
+            double precision :: q
+            double precision :: gam
+            double precision :: arat
+            double precision :: s2
+            double precision dimension(2) :: defl
+            integer :: ifirst1
+            integer :: ifirst2
+            common /ellfirsttime/ ifirst1,ifirst2
+        end subroutine fastelldefl
+
+        subroutine fastelldefl_array(x1in,x2in,q,gam,arat,s2,defl1,defl2,n) ! in :fastell:src/fastell.f
+            double precision dimension(n) :: x1in
+            double precision dimension(n) :: x2in
+            double precision :: q
+            double precision :: gam
+            double precision :: arat
+            double precision :: s2
+            double precision dimension(n) :: defl1
+            double precision dimension(n) :: defl2
+            integer :: n
+        end subroutine fastelldefl_array
+
+    end interface 
+end python module _fastell
+
+! This file was auto-generated with f2py (version:2).
+! See http://cens.ioc.ee/projects/f2py2e/

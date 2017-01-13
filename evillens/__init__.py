@@ -7,3 +7,5 @@ from analyticNFWLens import *
 from Plot_utils import *
 from MCMC import *
 from microLens import *
+from PowerKappa import *
+from _fastell import *
