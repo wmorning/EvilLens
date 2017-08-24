@@ -167,14 +167,18 @@ class MCMC(object):
         Remove walkers from the data used for study (risky)
         '''
         data = np.zeros([self.Nwalkers-1,self.Niter,self.Nparameters])
+        chi2 = np.zeros([self.Nwalkers-1,self.Niter])
         for i in range(self.Nwalkers):
             if i < walker_id:
                 data[i,:,:]   = self.data[i,:,:]
+                chi2[i,:] = self.chi2[i,:]
             elif i>walker_id:
                 data[i-1,:,:] = self.data[i,:,:]
+                chi2[i-1,:] = self.chi2[i,:]
             else:
                 pass
         self.data = data
+        self.chi2 = chi2
         self.Nwalkers -= 1
         
         return
