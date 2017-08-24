@@ -11,7 +11,9 @@ from astropy.io import fits
 from astropy import units,constants
 from astropy.cosmology import FlatLambdaCDM
 import scipy.special as sp
+from scipy.interpolate import interp1d
 import math
+import evillens as evil
 
 # ======================================================================
 
@@ -188,6 +190,160 @@ class Source(object):
         self.intensity *= self.Flux/(np.sum(self.intensity)*self.pixscale**2)
         return
         
+        
+# ----------------------------------------------------------------------
+
+    def build_sersic_clumps(self,Nnuclei=1,NclumpsPerNucleus=1,\
+                            x0=0,y0=0,q=1.,phi=0.,r_hl=0.1,n=1.,
+                            seed1 = 0):
+        '''
+        Build a source that (generally) follows a sersic profile, 
+        but with clumps that are broken into nuclei, allowing for
+        an extra level of structure compared to a simple analytic
+        source.
+                            
+        Takes:
+                            
+        - Nnuclei:            Number of nuclei
+        - NclumpsPerNucleus:  Number of clumps per nucleus
+        - x0,y0,q,phi,r_hl,n: parameters of the sersic profile
+        - seed1-4:            random seeds
+                            
+        Returns:
+        
+        - void:               Updates self.intensity
+        '''
+                       
+        bn = evil.Compute_bn(n)
+                            
+        # create nuclei
+        np.random.seed(seed1)
+        xn,yn = self.draw_clump_nuclei_positions(Nnuclei,x0,y0,q,r_hl,phi,n)
+        sn    = self.draw_clump_nuclei_sizes(Nnuclei,r_hl)
+        
+        for i in range(len(sn)):
+        
+            if i ==0:
+                xc,yc = self.draw_clump_positions(NclumpsPerNucleus,sn[i],xn[i],yn[i])
+                sc    = self.draw_clump_sizes_powerlaw(NclumpsPerNucleus,0.05*sn[i],sn[i])
+            else:
+                xctemp,yctemp = self.draw_clump_positions(NclumpsPerNucleus,sn[i],xn[i],yn[i])
+                xc    = np.append(xc,xctemp)
+                yc    = np.append(yc,yctemp)
+                sc    = np.append(sc, self.draw_clump_sizes_powerlaw(NclumpsPerNucleus,0.01*sn[i],sn[i]))
+        
+        # add clumps to image
+        for i in range(len(sc)):
+            if i ==0:
+                self.intensity = np.exp(-0.5*((self.beta_x-xc[i])**2+(self.beta_y-yc[i])**2)/sc[i]**2)
+            else:
+                self.intensity += np.exp(-0.5*((self.beta_x-xc[i])**2+(self.beta_y-yc[i])**2)/sc[i]**2)
+    
+        return
+        
+        
+    def draw_clump_sizes_powerlaw(self,Nclumps,min_size,max_size,index=-1):
+        '''
+        draw a list of clump radii (in arcsec) from a power-law
+        distribution with a specified index, and between a minimum
+        and maximum size.
+        
+        Takes:
+        
+        - Nclumps:  The number of clumps to draw sizes for
+        - min_size: The minimum size of clumps
+        - max_size: The maximum size of clumps
+        - index:    The power-law index
+        - seed:     An integer specifying the random state
+        
+        Returns:
+        
+        - sizes:    A list of sizes drawn randomly from the 
+                    power-law distribution
+        '''
+        
+        # setup interpolation function that will be used for generator
+        x = 10**np.linspace(np.log10(min_size),np.log10(max_size),100000)
+        y = x**index
+        y -= np.min(y)
+        y /= np.max(y)
+    
+        finterp = interp1d(y,x,'linear')
+    
+        draws = np.random.random(Nclumps)
+        sizes = finterp(draws)
+    
+        return sizes
+        
+    def draw_clump_nuclei_positions(self,Nnuclei,x0,y0,q,r_hl,phi,n):
+        '''
+        Draw a list of x and y coordinates for source nuclei
+        from a sersic distribution.
+        
+        Takes:
+        
+        Nnuclei:   Number of nuclei (clump superstructures)
+        x0,y0:     center of the source
+        q,phi:     the axis ratio and rotation angle of the source
+        r_hl:      The half-light radius of the source
+        n:         Sersic index
+        seed:      a seed to control the random generator
+        
+        Returns:
+        
+        x,y:       Randomly drawn coordinates of nuclei'''
+    
+        # first generate a sersic profile
+        r = np.linspace(0,5*r_hl,100000)
+        bn = evil.Compute_bn(n)
+        Ir = evil.Sersic(r*np.cos(0.),r*np.sin(0.),0.,0.,1.,r_hl,0.,n,bn)
+    
+        # Get CDF and normalize
+        Prob = np.flipud(np.cumsum(np.flipud(Ir)))
+        Prob /= np.max(Prob)
+    
+        # Interpolate random numbers to CDF to get sersic random numbers
+        finterp = interp1d(Prob,r,'linear')
+        draws = np.random.random(Nnuclei)
+        radius = finterp(draws)
+        
+        # draw random angles
+        angle = np.random.random(Nnuclei)*2*np.pi
+    
+        # transform radius and angle to x,y, position
+        xp = radius*np.cos(angle)/q
+        yp = radius*np.sin(angle)*q
+    
+        # rotate 
+        x = np.cos(phi)*(xp)+np.sin(phi)*(yp)
+        y = -np.sin(phi)*(xp)+np.cos(phi)*(yp)
+        
+        # adjust center
+        x += x0
+        y += y0
+    
+        return x,y
+        
+    def draw_clump_nuclei_sizes(self,Nnuclei,src_size):
+        '''
+        Arbitrarily defined nuclei size are taken to be 
+        inversely proportional to source size.  randomly
+        generate these sizes.
+        '''
+        
+        mu = 2*src_size/np.sqrt(float(Nnuclei))
+        sigma = 0.2*src_size/np.sqrt(float(Nnuclei))
+        
+        return np.random.normal(mu,sigma,Nnuclei)
+        
+    def draw_clump_positions(self,Nclumps,nuclei_size,x,y):
+        '''
+        Draw gaussian random positions for clumps.
+        '''
+        xc = np.random.normal(x,nuclei_size,Nclumps)
+        yc = np.random.normal(y,nuclei_size,Nclumps)
+        return xc,yc
+
 # ----------------------------------------------------------------------
 
     def write_source_to(self,fitsfile,overwrite=False):
