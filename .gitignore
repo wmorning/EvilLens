@@ -61,3 +61,5 @@ target/
 
 # ipython stuff
 *ipynb_checkpoints*
+
+*.py~
