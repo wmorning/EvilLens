@@ -11,6 +11,7 @@ from astropy.cosmology import FlatLambdaCDM
 
 import numpy as np
 import evillens as evil
+from scipy.interpolate import interp1d
 
 # ======================================================================
 
@@ -87,7 +88,7 @@ class PowerKappa(evil.GravitationalLens):
         yprime = -np.sin(angle) * x + np.cos(angle)* y
         
         # build kappa map
-        rhosq = x**2+y**2/self.q**2
+        rhosq = xprime**2+yprime**2/self.q**2
         self.kappa = (self.Q**2/(rhosq+self.r_c**2))**self.gam
         
         return
@@ -239,7 +240,7 @@ class PowerKappa(evil.GravitationalLens):
                 
                 # calculate deflections
                 alphaR     = (1/(GAMMA**2 - 4*GAMMA+4-m**2)) * (2-GAMMA)*(imR**(1-GAMMA)/(Rs)**(-GAMMA)) * (Am * np.cos(m*imTheta) + Bm * np.sin(m*imTheta))
-                alphaTheta = (m/(GAMMA**2-4*GAMMA+4-m**2)) * (2-GAMMA)*(imR**(1-GAMMA)/(Rs)**(-GAMMA)) * (-Am * np.sin(m*imTheta) + Bm * np.cos(m*imTheta))
+                alphaTheta = (m/(GAMMA**2-4*GAMMA+4-m**2)) * (imR**(1-GAMMA)/(Rs)**(-GAMMA)) * (-Am * np.sin(m*imTheta) + Bm * np.cos(m*imTheta))
  
                 # convert back to cartesian coords
                 alphaX = alphaR * np.cos(imTheta) + alphaTheta * (-np.sin(imTheta))
@@ -318,5 +319,94 @@ class PowerKappa(evil.GravitationalLens):
         delattr(self,'Multipoles')
         
         return
+        
+# ----------------------------------------------------------------------
+
+    def add_subhalo_population(self,halo_mass,minimum_subhalo_mass,\
+                               seed1 = np.random.randint(999999999),\
+                               seed2 = np.random.randint(999999999)):
+        '''
+        Add a subhalo population with a mass function and radial distribution
+        from Springel et al. 2008 and the other aquarius simulation papers.
+        
+        Takes: 
+        
+        - halo_mass:              The total mass of the dm halo 
+                                  (calculable from 10kpc mass?)
+        
+        - minimum_subhalo_mass:   Minimum subhalo mass to include (will
+                                  not affect abundance of high mass 
+                                  subhalos.)
+        
+        - seed1,seed2:            random seeds to allow for user control.      
+        
+        Returns:
+        - void:                   updates deflections and kappa to include
+                                  subhalos.
+        
+        '''
+        
+        # first, compute the CDF of the subhalos (include larger range than allowed subhalo masses)
+        Msubs = 10**np.linspace(np.log10(minimum_subhalo_mass)-3.,np.log10(halo_mass)+3.,4000)
+        CDF = evil.Subhalo_cumulative_mass_function(Msubs,halo_mass)
+    
+        # build interpolation kernel
+        finterp = interp1d(CDF/np.max(CDF),Msubs,'linear')
+    
+        # now draw a number of subhalos equivalent to the max of the CDF from the CDF
+        np.random.seed(seed1)
+        Subhalo_masses = finterp(np.random.random(np.max(CDF).astype('int')))
+    
+        # Cut all subhalos below the mass cutoff
+        Subhalo_masses = Subhalo_masses[(Subhalo_masses>minimum_subhalo_mass)]
+        
+        # How many subhalos are left?
+        Nsubs = len(Subhalo_masses)
+        
+        # now get radial distributions...
+        # pdf of n(r) is an Einasto profile.  Get CDF
+        r_kpc = np.linspace(0,10000.,10**6)
+        pdf = evil.Einasto(r_kpc,0.678,199.)
+        cdf = np.flipud(np.cumsum(np.flipud(pdf)))
+    
+        # create interpolation kernel
+        radial_interp = interp1d(cdf/np.max(cdf),r_kpc,'linear')
+    
+        # draw subhalo radii
+        np.random.seed(seed2)
+        r = radial_interp(np.random.random(Nsubs))
+    
+        # Have radius, now want position angle
+        # random in 3D
+        phi = np.random.random(Nsubs)*2*np.pi
+        theta = np.random.random(Nsubs)*np.pi
+    
+        # radii and angles to xyz (also add ellipticity)
+        xp = r*np.cos(phi)*np.sin(theta)/self.q
+        yp = r*np.sin(phi)*np.sin(theta)*self.q
+    
+        # rotate to align with halo major axis and 
+        # produce ellipticity
+        angle = self.angle + np.pi/2.
+        x =  np.cos(angle) * xp - np.sin(angle) * yp
+        y =  np.sin(angle) * xp + np.cos(angle) * yp
+        
+        # Have masses and position, in kpc, now get them in
+        # arcseconds
+        x = (x*units.kpc/self.Dd).decompose().value*3600.*180./np.pi
+        y = (y*units.kpc/self.Dd).decompose().value*3600.*180./np.pi
+        
+        # center them on the lens and stack them in a
+        # single array
+        x += self.centroid[0]
+        y += self.centroid[1]
+        sub_centroids = np.dstack([x,y])[0,:,:]
+        
+        # Add them to model as we would've done before
+        self.add_subhalos(Subhalo_masses,sub_centroids,Nsubs)
+        
+        return
+        
+        
         
 # ----------------------------------------------------------------------
