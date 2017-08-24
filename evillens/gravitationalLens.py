@@ -720,19 +720,11 @@ class GravitationalLens(object):
         if self.source is None: 
             raise Exception("Can't do raytracing yet.\n")  
             
-        else:
-            
-            #  give each pixel in the image an x,y position, should be same as image_x, image_y
-            self.theta_x = np.copy(self.image_x)
-            self.theta_y = np.copy(self.image_y)            
-            
-            #theta_x = np.arange(-(self.NX//self.n)/2.0,(self.NX//self.n)/2.0,1.0)*self.pixscale+self.pixscale+self.pixel_offset
-            #theta_y = np.arange(-(self.NY//self.n)/2.0,(self.NY//self.n)/2.0,1.0)*self.pixscale+self.pixscale+self.pixel_offset
-            #self.theta_x,self.theta_y = np.meshgrid(theta_x,theta_y)
+        else:       
             
             #Find the corresponding angles in the source plane              
-            self.beta_x = self.theta_x-self.alpha_x
-            self.beta_y = self.theta_y-self.alpha_y            
+            self.beta_x = self.image_x-self.alpha_x
+            self.beta_y = self.image_y-self.alpha_y            
             
             # single wavelength
             if len(self.source.intensity.shape) ==2:
@@ -756,18 +748,18 @@ class GravitationalLens(object):
                 
                 
             else:   #multiwavelength data cube
-                self.image = np.empty([self.source.Naxes,self.NY//self.n,self.NX//self.n], float)
+                self.image = np.empty([self.source.intensity.shape[0],self.NY//self.n,self.NX//self.n], float)
                 
-                for i in range(self.source.Naxes):
+                for i in range(self.source.intensity.shape[0]):
                     f_interpolation = interpolate.RectBivariateSpline(self.source.beta_y[:,0],self.source.beta_x[0,:],self.source.intensity[i,:,:],kx=1,ky=1)
                     
                     self.image[i,:,:] = f_interpolation.ev(self.beta_y.flatten(),self.beta_x.flatten()).reshape([self.NY//self.n,self.NX//self.n])
                     
-                    # outside the source plane, the image must be 0
-                    self.image[np.where(self.beta_x<np.min(self.source.beta_x))] = 0
-                    self.image[np.where(self.beta_x>np.max(self.source.beta_x))] = 0
-                    self.image[np.where(self.beta_y<np.min(self.source.beta_y))] = 0
-                    self.image[np.where(self.beta_y>np.max(self.source.beta_y))] = 0
+                    # outside the mapped source plane, the image must be 0
+                    self.image[i,:,:][np.where(self.beta_x<np.min(self.source.beta_x))] = 0
+                    self.image[i,:,:][np.where(self.beta_x>np.max(self.source.beta_x))] = 0
+                    self.image[i,:,:][np.where(self.beta_y<np.min(self.source.beta_y))] = 0
+                    self.image[i,:,:][np.where(self.beta_y>np.max(self.source.beta_y))] = 0
                             
         return
 
