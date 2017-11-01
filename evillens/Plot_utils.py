@@ -15,6 +15,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import corner
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.mlab import griddata
+from operator import mul
 
 
 def Plot_chains(MCMC,paramslist=None,Numpars=None,Tburn=None,Niter=None,figsize=[5,5], \
@@ -480,7 +481,7 @@ def Plot_source(sourcedir,Npixels,source_L,sourcecent,includecaustics=True,\
     return fig
     
     
-def Compare_Triangles(MCMC1,MCMC2,paramslist=None,Title=None,Filename=None,levels=[0.68,0.95],truths=None,Nbins=20):
+def Compare_Triangles(MCMC1,MCMC2,paramslist=None,Title=None,Filename=None,levels=[0.68,0.95],truths=None,Nbins=20,show_both=False):
     
     d1 = MCMC1.data.reshape(-1,MCMC1.Nparameters)
     d2 = MCMC2.data.reshape(-1,MCMC2.Nparameters)
@@ -501,8 +502,19 @@ def Compare_Triangles(MCMC1,MCMC2,paramslist=None,Title=None,Filename=None,level
     if Nbins is None:
         Nbins = 50
         
-    fig = corner.corner(d1,levels = levels, labels=paramslist , truths=truths,plot_datapoints=False,bins=Nbins,fill_contours=True,hist_kwargs=dict(normed=True))
-    corner.corner(d2,fig=fig,levels=levels,color='blue',plot_datapoints=False,bins=Nbins,fill_contours=True,hist_kwargs=dict(normed=True));
+    # if we want to see both sets of contours, set the ranges manually
+    if show_both is True:
+        upper_lims = np.vstack([np.max(MCMC1.data,axis=(0,1)),np.max(MCMC2.data,axis=(0,1))])
+        lower_lims = np.vstack([np.min(MCMC1.data,axis=(0,1)),np.min(MCMC2.data,axis=(0,1))])
+        ranges = []
+        for i in range(MCMC1.Nparameters):
+            ranges.append((lower_lims[:,i].min(),upper_lims[:,i].max()))
+        print ranges
+    else:
+        ranges=None
+        
+    fig = corner.corner(d1,range=ranges,levels = levels, labels=paramslist , truths=truths,plot_datapoints=False,bins=Nbins,fill_contours=True,hist_kwargs=dict(normed=True))
+    corner.corner(d2,range=ranges,fig=fig,levels=levels,color='blue',plot_datapoints=False,bins=Nbins,fill_contours=True,hist_kwargs=dict(normed=True));
     
     if Title is not None:
         plt.suptitle(Title,fontsize=22)
@@ -971,7 +983,7 @@ def Plot_Tesellated_Subs(subfileslist,xlim=None,ylim=None,Flipped=False,figscale
         if ylim is not None:
             plt.ylim(ylim)
         if labels is not None:
-            plt.text((xlim[0]+xlim[1])/2.0,(ylim[0]+ylim[1])/2.0+(ylim[1]-ylim[0])/2.5,labels[i],fontsize=24.0*figscale,horizontalalignment='center',verticalalignment='center')
+            plt.text((xlim[0]+xlim[1])/2.0,(ylim[0]+ylim[1])/2.0+(ylim[1]-ylim[0])/2.5,labels[i],fontsize=24.0*figscale,horizontalalignment='center',verticalalignment='center',bbox={'color':'white','alpha':0.5})
         if sigcontours is True:
             xi,yi = np.meshgrid(np.linspace(xlim[0],xlim[1],50),np.linspace(ylim[0],ylim[1],50))
             zi = griddata(subx,(1-2*Flipped)*(suby),dx2/np.sqrt(abs(dx2)),xi,yi,interp='linear')
@@ -987,6 +999,80 @@ def Plot_Tesellated_Subs(subfileslist,xlim=None,ylim=None,Flipped=False,figscale
         plt.suptitle(Figtitle,fontsize=24*figscale)
             
     return fig
+    
+    
+def Plot_Subhalo_Mass_Function(fileslist,mass_coords=None):
+    '''
+    Using linearized delta_chi2 maps, calculate and plot the subhalo mass function.
+    
+    Takes:
+    
+    - fileslist:  The list of filenames of the linearized maps.
+    '''
+    
+    if mass_coords is None:
+        dM = 10**8.5-10**8.0*np.ones(len(fileslist))
+    else:
+        dM = np.diff(mass_coords)
+        dM = np.append(dM,dM[-1])
+    
+    # Arrays for subhalo pdfs and upper/lower limits
+    Psubs = np.zeros([len(fileslist),100000])
+    Upperlim = np.zeros(len(fileslist))
+    Lowerlim = np.zeros(len(fileslist))
+    
+    # iterate over list of files
+    for i in range(len(fileslist)):
+        
+        # Load subhalo map files
+        subdat = np.loadtxt(fileslist[i])
+        x  = subdat[1:,2]
+        y  = subdat[1:,3]
+        M  = subdat[1, 1]
+        dE = subdat[1:,6]
+        
+        # get tesellation vertex coordinates and indices
+        tesl, inds = reconstruct_subhalo_tesselation(x,y)
+        
+        # Get areas of cells
+        Area =  tesl[:,0,0]*(tesl[:,1,1]-tesl[:,2,1])
+        Area += tesl[:,1,0]*(tesl[:,2,1]-tesl[:,0,1])
+        Area += tesl[:,2,0]*(tesl[:,0,1]-tesl[:,1,1])
+        Area /= 2.0
+        
+        n_points=100000
+        dN_dM = np.linspace(0,300,n_points)/1.0e8
+        
+        # ignore points with delta chi2<-5
+        min_chi2 = -5.
+        A  = Area[(dE>min_chi2)]
+        dx2 = dE[(dE>min_chi2)]
+        
+        # Calculate PDF for one subhalo based on exclusions
+        Pdf1 = np.exp(dN_dM * dM[i] *np.sum(A*(np.exp(-0.5*dx2)-1.)))
+        
+        # Calculate PDF based on detections (if any)
+        dx2 = dE[(dE<min_chi2)]
+        A = Area[(dE<min_chi2)]
+        
+        Pdf2 = np.zeros(len(dN_dM))
+        try:
+            for j in range(len(dN_dM)):
+                Pdf2[j] = np.exp(-dN_dM[j] * dM[i] * np.sum(A))*reduce(mul,(1+dN_dM[j]*dM[i]*A*np.exp(-0.5*dx2)))
+        except TypeError:
+            print "no pixels have negative delta-chi2."
+            Pdf2 += 1.
+        Pdf3 = 1.
+        
+        pdf = Pdf1*Pdf2*Pdf3
+        pdf /= np.sum(pdf*(dN_dM[1]-dN_dM[0]))
+        Psubs[i,:] = pdf/np.max(pdf)
+        indmax = np.argmax(pdf)
+        
+        CDF = np.cumsum(pdf*(dN_dM[1]-dN_dM[0]))
+        Upperlim[i] = dN_dM[(CDF>0.95)][0]
+    
+    return Upperlim,Psubs,Pdf1,Pdf2,Pdf3, Area,dE
     
 def Plot_Fisher_Forecast(fisher_matrix,params,param_IDs,figscale=1,param_names=None):
     
@@ -1190,7 +1276,63 @@ def Compare_Forecasts(Fisherlist,params,param_IDs,MCMC=None,figscale=1,mean_subt
     return fig
                     
             
+def reconstruct_subhalo_tesselation(subx,suby):
+    '''given list of x and y coordinates, return the subhalo simplex tesselation'''
     
+    Nsubs = len(subx)
+    Num_levels=10
+    
+    # Begin the tesellation
+    T1_cent = np.array([subx[0],suby[0]])
+    T1_size = np.linalg.norm(np.array([subx[1],suby[1]])-T1_cent)
+    tesl = np.zeros([Nsubs,3,2])
+    
+    for j in range(Num_levels):
+        
+        A = tesl[:,0,0]*tesl[:,1,1]+tesl[:,0,1]*tesl[:,2,0]+tesl[:,1,0]*tesl[:,2,1]
+        A -=tesl[:,0,0]*tesl[:,2,1]+tesl[:,0,1]*tesl[:,1,0]+tesl[:,1,1]*tesl[:,2,0]
+        if np.sum(A==0) ==0:
+            break
+        
+        for k in range(Nsubs):
+            Ti_cent = np.array([subx[k],suby[k]])
+            Ti_size = T1_size/(2.0**j)
+            
+            # Try forward facing triangle
+            vert1 = Ti_cent+Ti_size*np.array([np.cos(0),np.sin(0)])
+            vert2 = Ti_cent+Ti_size*np.array([np.cos(2*np.pi/3.0),np.sin(2*np.pi/3.0)])
+            vert3 = Ti_cent+Ti_size*np.array([np.cos(4*np.pi/3.0),np.sin(4*np.pi/3.0)])
+            
+            B1 = (subx-vert1[0]) * (vert1[1]-vert2[1]) / (vert1[0]-vert2[0]) + Ti_cent[1]
+            B2 = vert2[0]
+            B3 = (subx-vert1[0]) * (vert3[1]-vert1[1]) / (vert3[0]-vert1[0]) + Ti_cent[1]
+            
+            if (np.sum((suby<B1+10**-5) & (subx>B2-10**-5) & (suby>B3-10**-5))==1) & (tesl[k,0,0] ==0):
+                tesl[k,0,:] = vert1
+                tesl[k,1,:] = vert2
+                tesl[k,2,:] = vert3
+            
+            # Try backward facing triangle
+            vert1 = Ti_cent+Ti_size*np.array([np.cos(np.pi),np.sin(np.pi)])
+            vert2 = Ti_cent+Ti_size*np.array([np.cos(2*np.pi/3.0+np.pi),np.sin(2*np.pi/3.0+np.pi)])
+            vert3 = Ti_cent+Ti_size*np.array([np.cos(4*np.pi/3.0+np.pi),np.sin(4*np.pi/3.0+np.pi)])
+            
+            B1 = (subx-vert1[0]) * (vert1[1]-vert2[1]) / (vert1[0]-vert2[0]) + Ti_cent[1]
+            B2 = vert2[0]
+            B3 = (subx-vert1[0]) * (vert3[1]-vert1[1]) / (vert3[0]-vert1[0]) + Ti_cent[1]
+            
+            if (np.sum( (suby>B1-10**-5) & (subx<B2+10**-5) & (suby<B3+10**-5)) ==1) & (tesl[k,0,0] == 0):
+                tesl[k,0,:] = vert1
+                tesl[k,1,:] = vert2
+                tesl[k,2,:] = vert3
+                
+    # Reshape the constructed tesellation and assign sequential indices for tripcolor
+    tesl2 = tesl.reshape(-1,2)
+    inds  = np.arange(tesl2.shape[0]).reshape(tesl.shape[0],3)
+    
+    
+    return tesl, inds
+
 
     
 def load_binary(binaryfile):
