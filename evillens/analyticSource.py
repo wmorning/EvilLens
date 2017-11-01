@@ -56,8 +56,8 @@ class SersicSource(evil.Source):
             self.reff = reff
         
         # convert to rotated coordinates
-        xp = np.cos(self.angle)*self.beta_x + np.sin(self.angle)*self.beta_y
-        yp =-np.sin(self.angle)*self.beta_x + np.cos(self.angle)*self.beta_y
+        xp = np.cos(self.angle)*(self.beta_x-self.position[0]) + np.sin(self.angle)*(self.beta_y-self.position[1])
+        yp =-np.sin(self.angle)*(self.beta_x-self.position[0]) + np.cos(self.angle)*(self.beta_y-self.position[1])
     
         # convert to elliptical radius
         r = np.sqrt(self.q*xp**2 + yp**2/self.q)
@@ -111,9 +111,9 @@ class GaussianSource(evil.Source):
             self.sigma = sigma
     
         # convert to rotated coordinates
-        xp = np.cos(self.angle)*self.beta_x + np.sin(self.angle)*self.beta_y
-        yp =-np.sin(self.angle)*self.beta_x + np.cos(self.angle)*self.beta_y
-    
+        xp = np.cos(self.angle)*(self.beta_x-self.position[0]) + np.sin(self.angle)*(self.beta_y-self.position[1])
+        yp =-np.sin(self.angle)*(self.beta_x-self.position[0]) + np.cos(self.angle)*(self.beta_y-self.position[1])
+
         # convert to elliptical radius
         r = np.sqrt(self.q*xp**2 + yp**2/self.q)
         
