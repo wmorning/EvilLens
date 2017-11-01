@@ -892,7 +892,7 @@ class Saboteur(object):
                 self.antennaphases[j,i] = f_interp(self.antennaY[j],self.antennaX[j]+self.velocity*i)        
         
 # ---------------------------------------------------------------------------    
-    def add_phase_errors(self, v , fast = False, cellsize = 10.0 ,convolution=False, randseed = 1):
+    def add_phase_errors(self, v , fast = False, cellsize = 10.0 , convolution=False, randseed = 1,wvr_calibration=False,pwvmean=0.003,proportional_error=0.02):
         '''
         Create coordinate grid of rms phases, using the phase structure function.
         Assign one phase to each antenna, determined using the antenna's position
@@ -926,9 +926,46 @@ class Saboteur(object):
         
         self.assign_phases_to_antennas( v, fast, cellsize, convolution, randseed)
         
+        if wvr_calibration == True:
+            self.wvr_calibration(pwvmean,proportional_error)
+        
         self.Visibilities *= np.exp(1j*(self.phase_errors1-self.phase_errors2))   
         
         return
+
+# -------------------------------------------------------------------------
+
+    def wvr_calibration(self,pwvmean,proportional_error):
+        '''
+        Mock the ALMA water vapor radiometer phase calibration to remove
+        large scale phase variations from the data, and make it more 
+        closely resemble the data that ALMA will deliver
+        
+        Inputs:
+        
+        pwvmean -       The mean thickness (in m) of the water vapor column
+        
+        proportional_error  - proportional error scale
+        '''
+        
+        # first get phase corrections using the antennaphases array
+        pwv = self.antennaphases * self.wavelength /(2*np.pi) + pwvmean
+        pwv_meas = pwv + 1.0e-5 * np.random.normal(0.0,abs(1+pwv/0.001))
+        WVR_correction = 2*np.pi*(pwv_meas-pwvmean) / self.wavelength
+        
+        # Get proportional error size for each antenna
+        PE = np.random.normal(0.0,proportional_error,self.antennaphases.shape[0])
+        PE = np.outer(PE,np.ones(self.antennaphases.shape[1]))
+        
+        # Total WVR estimated phase
+        self.WVR_correction = WVR_correction -PE
+        
+        # Correct the phase errors
+        for i in range(self.Nantennas-1):
+            for j in range(i+1,self.Nantennas):
+                self.phase_errors1[np.logical_and((self.antenna1==i),(self.antenna2==j))] -= self.WVR_correction[i]
+                self.phase_errors2[np.logical_and((self.antenna1==i),(self.antenna2==j))] -= self.WVR_correction[j]
+                
 
 # -------------------------------------------------------------------------
 
