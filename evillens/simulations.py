@@ -105,7 +105,6 @@ def get_sigma_scaling(u,v,vis,sigma):
     print "Total number of visibilities used was", TotalUsed , "out of" , len(vis)
     print NumSkippedBins , "bins out of" , len(row), "had only one visibility and were skipped"
     print "Sigma Scaling:  " , A
-    print "sigma:  " , sigma
     
     return A
     
@@ -279,8 +278,8 @@ def get_phase_grid(antX,antY,time,amp,velocity,cellsize=10.0,randseed=1):
     # determine the sizes of the phase screen
     maxX = (np.max(antX) +(np.max(antX)-np.min(antX))+velocity*duration) // cellsize * cellsize + 4*cellsize
     minX = np.min(antX) // cellsize * cellsize+ 4*cellsize
-    maxY = 4 * (np.max(antY) // cellsize * cellsize + 4*cellsize)
-    minY = 4 * (np.min(antY) // cellsize * cellsize + 4*cellsize)
+    maxY = np.max([6000.//cellsize * cellsize+cellsize,4 * (np.max(antY) // cellsize * cellsize + 4*cellsize)])
+    minY = np.min([-6000.//cellsize * cellsize+cellsize,4 * (np.min(antY) // cellsize * cellsize + 4*cellsize)])
     
     x = np.arange(minX,maxX+cellsize,cellsize)
     y = np.arange(minY,maxY+cellsize,cellsize)
@@ -293,8 +292,6 @@ def get_phase_grid(antX,antY,time,amp,velocity,cellsize=10.0,randseed=1):
     phases = np.fft.fft2(phases / cellsize)
     FreqX = np.fft.fftfreq(len(x),1.0/float(len(x)))*2.0*np.pi/(x[-1]-x[0])
     FreqY = np.fft.fftfreq(len(y),1.0/float(len(y)))*2.0*np.pi/(y[-1]-y[0])
-    
-    print phases.shape
     
     # Slowly transform the FT phase screen by the power spectrum
     for i in range(len(FreqX)):
@@ -355,3 +352,44 @@ def Mock_phase_calibration(antennaphases,ant1,ant2,pwv_mean,proportional_error):
             correction_ant1[np.logical_and((ant1==i),(ant2==j))] -= WVR_correction[i]
             correction_ant2[np.logical_and((ant1==i),(ant2==j))] -= WVR_correction[j]
     return correction_ant1 , correction_ant2
+    
+    
+def write_blinded_parameters(lens,output_file_prefix):
+    '''
+    Given a lens, write the lens information to a folder 
+    '''
+    
+    if not os.path.exists(output_file_prefix):
+        os.mkdir(output_file_prefix)
+    
+    lens.source.write_source_to(output_file_prefix+'source_true.fits')
+    
+    filecontents = np.empty([24,2],str)
+    filecontents[0,0]  = "Gamma:"
+    filecontents[1,0]  = "logM:"
+    filecontents[2,0]  = "ex:"
+    filecontents[3,0]  = "ey:"
+    filecontents[4,0]  = "x:"
+    filecontents[5,0]  = "y:"
+    filecontents[6,0]  = "shear1:"
+    filecontents[7,0]  = "shear2:"
+    filecontents[8,0]  = "A3:"
+    filecontents[9,0]  = "B3:"
+    filecontents[10,0] = "A4:"
+    filecontents[11,0] = "B4:"
+    
+    filecontents[0,0]  = str(lens.Gamma)
+    filecontents[1,0]  = str(lens.logM)
+    filecontents[2,0]  = str((1-lens.q)*np.cos(lens.angle)*10)
+    filecontents[3,0]  = str(-(1-lens.q)*np.sin(lens.angle)*10)
+    filecontents[4,0]  = str(lens.centroid[0])
+    filecontents[5,0]  = str(-lens.centroid[1])
+    filecontents[6,0]  = str( lens.Multipoles[0,0])
+    filecontents[7,0]  = str(-lens.Multipoles[0,1])
+    filecontents[8,0]  = str( lens.Multipoles[1,0])
+    filecontents[9,0]  = str(-lens.Multipoles[1,1])
+    filecontents[10,0] = str( lens.Multipoles[2,0])
+    filecontents[11,0] = str(-lens.Multipoles[2,1])
+    
+    filecontents[13,0] = "Subhalos:"
+    #filecontents[13,1] = str(len())
