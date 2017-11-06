@@ -39,34 +39,36 @@ default('simobserve')
 # ----------------- lens simulation Arguments ----------------- #
 
 # parameter ranges
-gamma_range = [0.4,1.8]                 #
-mass_range  = [1.12,1.13]               #
-elp_range   = [0.0,0.25]                #
-ang_range   = [-np.pi,np.pi]            #
-x_range     = [-0.1,0.1]                #
-y_range     = [-0.1,0.1]                #
-shear_range = [-0.05,0.05]              #
-mult_range  = [-0.05,0.05]              #
-zlens       = 0.14                      #
-zsrc        = 4.0                       #
+gamma_range = [0.4,1.8]                     #
+mass_range  = [1.12,1.13]                   #
+elp_range   = [0.0,0.25]                    #
+ang_range   = [-np.pi,np.pi]                #
+x_range     = [-0.1,0.1]                    # 
+y_range     = [-0.1,0.1]                    #
+shear_range = [-0.05,0.05]                  #
+mult_range  = [-0.05,0.05]                  #
+zlens       = 0.14                          # Trying to decide if these should be inputs or randoms
+zsrc        = 4.0                           # Same as the lens redshift.
 
 # random seed for control
 lens_seed = 48214
 
 # how complicated is lens model?
-SIE = True # if false, a gamma will be randomly chosen, otherwise gamma = 1
-Multipoles = False # if false, just add shear.  Otherwise add m = 3 and m = 4 multipoles.
-Substructures = False # maybe this shouldn't be an input, and the code should randomly decide.
+SIE = True                                  # if false, a gamma will be randomly chosen, otherwise gamma = 1
+Multipoles = False                          # if false, just add shear.  Otherwise add m = 3 and m = 4 multipoles.
+Substructures = False                       # maybe this shouldn't be an input, and the code should randomly decide.
 
 # lens grid parameters
-NX_lens = 400
-NY_lens = 400
-pixscale_lens = 0.01
+NX_lens = 400                               # Note that the full extent of the lensed image grid is
+NY_lens = 400                               # NX * pixscale_lens, so make sure that this is at least 4 arcsec
+pixscale_lens = 0.01                        # Also, remember that ALMA 6k or 12k bl can resolve 0.002 arcsec...
 
 # Source parameters
-source_scale = 1.5
-source_grid_center = [0.0,0.0]
-source_image = '/Users/wmorning/research/EvilLens/lair/CarterPewterSchmidt_src.fits' # We should look into this
+source_scale = 1.0                          # In case we want to stretch the size of the source grid
+source_grid_center_range = [-0.4,0.4]       # Randomly pick a position for the source
+build_source = True                         # If true, generates the source image (slow)
+source_image = '../CarterPewterSchmidt_src.fits' # If build_source is false, you must load one (fits image)
+
 
 # ----------------- CASA simulation Arguments ----------------- #
 incenter = '345GHz'                         # Observing frequency
@@ -74,14 +76,14 @@ inwidth = '8GHz'                            # Observing bandwidth (ALMA continuu
 Flux = 0.15                                 # Flux (in Jy)
 indirection = 'J2000 19h00m00 -50d00m00'    # Location of source on sky (not sure if actually used)
 project = 'Practice_simulation'             # Name of simulation
-antennalist = 'alma.cycle2.7.cfg'                   # ALMA observing configuration
-totaltime = '40min'                        # Duration of observation
+antennalist = 'alma.cycle2.7.cfg'           # ALMA observing configuration
+totaltime = '40min'                         # Duration of observation
 integration = '60s'                         # Time for single ALMA integration
 skymodel = 'Practice_simulation.fits'       # Name for lensed image fits file (writes and reads this image)
 
 # ----------------- Phase Error Sim Arguments ----------------- #
 
-add_phase_errors = True                     # if false, can ignore all other args here
+add_phase_errors = False                    # if false, can ignore all other args here
 Mock_calibration = True                     # if True, a Mock ALMA WVR calibration is used
 Phase_random_seed = 1                       # random seed for control
 wind_speed=6.0                              # velocity of the phase screen (in m/s)
@@ -104,7 +106,7 @@ keepflags      = False                      # Keep flagged data? (obviously keep
     
     
 # post mstransform arguments
-NUM_TIME_STEPS = 1       # Number of time intervals to use in Ripples phase calibration
+NUM_TIME_STEPS = 1                          # Number of time intervals to use in Ripples phase calibration
 
 # ------------------------------------------------------------- #
 
@@ -337,11 +339,34 @@ if __name__ == '__main__':
     lens.deflect()
     lens.add_multipoles([[g1,g2],[Multipoles*A3,Multipoles*B3],[Multipoles*A4,Multipoles*B4]])
     
-    # Load the source from a fits image
+    # Construct the source
     lens.source = evil.Source(zsrc)
-    lens.source.read_source_from(source_image)
+    if build_source is True:
+        lens.source.setup_grid(NX=1600,NY=1600,pixscale=0.000625)  # need crazy hi-res grid because of magnification
+        
+        # I have found that these control parameters for the source seem to produce good images
+        Nclumps = np.random.randint(1,5)
+        Nsubclumps = np.random.randint(100,500)
+        xs = 0.0
+        ys = 0.0
+        qs = np.random.random()*0.7+0.3
+        phi_s = np.random.random()*np.pi
+        r_hl_s = np.random.random()*0.03+0.02
+        n_src = np.random.random()*0.75+0.25
+        
+        # Create the source image
+        lens.source.build_sersic_clumps(Nnuclei=Nclumps,NclumpsPerNucleus=Nsubclumps,\
+                                        x0=xs,y0=ys,q=qs,phi=phi_s,r_hl=r_hl_s,n=n_src,\
+                                        seed1=lens_seed+500)
+    else:
+        lens.source.read_source_from(source_image)
+    
+    # scale the source grid
     lens.source.beta_x *= source_scale
     lens.source.beta_y *= source_scale
+    
+    # shift center position of source grid (and thus, the position of the source)
+    source_grid_center = np.random.random(2)*(source_grid_center_range[1]-source_grid_center_range[0])+source_grid_center_range[0]
     lens.source.beta_x += source_grid_center[0]
     lens.source.beta_y += source_grid_center[1]
     
@@ -407,8 +432,10 @@ if __name__ == '__main__':
     # Clean up (remove temporary files)
     shutil.rmtree(noisyms)
     shutil.rmtree(noiselessms)
-    shutil.rmtree(Phase_error_ms)
-    shutil.rmtree(Binned_ms)
+    if add_phase_errors is True:
+        shutil.rmtree(Phase_error_ms)
+    if run_mstransform is True:
+        shutil.rmtree(Binned_ms)
     
     
     print("The simulation pipeline has run successfully!!")
