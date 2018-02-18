@@ -20,11 +20,11 @@ play around with compiling fastell.f in a python readable format.
 
 ## Tests, demos etc
 
-* [Deflection angle testing](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/master/DeflectionTest.ipynb)
-* [Plot testing](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/master/PlottingTest.ipynb)
-* [Image Testing](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/master/LensedImageTest.ipynb)
-* [Error Metric Demonstration](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/master/ErrorMetricDemo.ipynb)
-* [Antenna Effects Demonstration](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/master/AntennaEffects.ipynb)
+* [Deflection angle testing](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/master/examples/DeflectionTest.ipynb)
+* [Plot testing](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/master/examples/PlottingTest.ipynb)
+* [Image Testing](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/master/examples/LensedImageTest.ipynb)
+* [Error Metric Demonstration](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/master/examples/ErrorMetricDemo.ipynb)
+* [Antenna Effects Demonstration](http://nbviewer.ipython.org/github/wmorning/EvilLens/blob/master/examples/AntennaEffects.ipynb)
 
 ## Authors
 
