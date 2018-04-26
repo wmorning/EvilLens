@@ -16,6 +16,10 @@ import os
 import struct
 from scipy.interpolate import RectBivariateSpline
 import shutil
+from xml.etree.ElementTree import Element , SubElement , Comment
+from xml.etree import ElementTree
+from xml.dom import minidom
+import json
 
 
 # ------------------------------------------------------------------------
@@ -324,7 +328,6 @@ def assign_phases_to_antennas(ant1,ant2,antX,antY,PhaseGrid,phase_x,phase_y,velo
     antennaphases = np.zeros([len(antX),Ntsteps],float)
     tstepsize = np.unique(time)[1]-np.unique(time[0])
     for i in range(len(antX)):
-        print antennaphases[i,:].shape, 
         antennaphases[i,:] = f_interp.ev(antY[i]*np.ones(Ntsteps),antX[i]+tstepsize*velocity*np.arange(Ntsteps))
     
     return antenna1_phase,antenna2_phase,antennaphases
@@ -332,6 +335,8 @@ def assign_phases_to_antennas(ant1,ant2,antX,antY,PhaseGrid,phase_x,phase_y,velo
 # ------------------------------------------------------------------------    
     
 def Mock_phase_calibration(antennaphases,ant1,ant2,pwv_mean,proportional_error):
+    
+    # Change from electrical path length to meters and add the mean pwv
     pwv = antennaphases / (2*np.pi) + pwv_mean
     pwv_meas = pwv + 1.0e-5 * np.random.normal(0.0,abs(1+pwv/0.001))
     WVR_correction = 2*np.pi*(pwv_meas-pwv_mean)
@@ -354,6 +359,120 @@ def Mock_phase_calibration(antennaphases,ant1,ant2,pwv_mean,proportional_error):
     return correction_ant1 , correction_ant2
     
     
+def Write_xml_file():
+    '''
+    Given a lens object, as well as a number of other arguments, create the tree structure for
+    the xml file  that is read by the pipeline.
+    '''
+    
+    # Create the tree structure
+    Ripples               = Element('Ripples')
+    parameters            = SubElement(Ripples,'parameters')
+    num_gangs             = SubElement(parameters,'num_gangs')
+    num_chan              = SubElement(parameters,'num_chan')
+    zLENS                 = SubElement(parameters,'zLENS')
+    zSOURCE               = SubElement(parameters,'zSOURCE')
+    imside                = SubElement(parameters,'imside')
+    LAMBDA                = SubElement(parameters,'LAMBDA')
+    file_name             = SubElement(parameters,'file_name')
+    mask_file             = SubElement(parameters,'mask_file')
+    num_side              = SubElement(parameters,'num_side')
+    N_sg_pix              = SubElement(parameters,'N_sg_pix')
+    SRC_L                 = SubElement(parameters,'SRC_L')
+    lens_centerX          = SubElement(parameters,'lens_centerX')
+    lens_centerY          = SubElement(parameters,'lens_centerY')
+    primary_beam_fwhm     = SubElement(parameters,'primary_beam_fwhm')
+    src_centX             = SubElement(parameters,'src_centX')
+    src_centY             = SubElement(parameters,'src_centY')
+    src_prior_type        = SubElement(parameters,'src_prior_type')
+    subhalo               = SubElement(Ripples,'subhalo')
+    phase_angle_prior_rms = SubElement(subhalo,'phase_angle_prior_rms')
+    num_phase_pars        = SubElement(subhalo,'num_phase_pars')
+    logMsub               = SubElement(subhalo,'logMsub')
+    dOdPhase_file         = SubElement(subhalo,'dOdPhase_file')
+    subhaloX_file         = SubElement(subhalo,'subhaloX_file')
+    subhaloY_file         = SubElement(subhalo,'subhaloY_file')
+    output_file           = SubElement(subhalo,'output_file')
+    subhalo_start_ind     = SubElement(subhalo,'subhalo_start_ind')
+    deltaP                = SubElement(subhalo,'deltaP')
+    action                = SubElement(Ripples,'action')
+    Model                 = SubElement(action,'Model')
+    modelpars             = SubElement(action,'modelpars')
+    parameter_flags       = SubElement(action,'parameter_flags')
+    stepsize              = SubElement(action,'stepsize')
+    task                  = SubElement(action,'task')
+    findLambda            = SubElement(action,'findLambda')
+    output_file_prefix    = SubElement(action,'output_file_prefix')
+    GetImage              = SubElement(action,'GetImage')
+    PhaseCal              = SubElement(action,'PhaseCal')
+    MCMC                  = SubElement(Ripples,'MCMC')
+    numWalkers            = SubElement(MCMC,'numWalkers')
+    prior_up              = SubElement(MCMC,'prior_up')
+    prior_dn              = SubElement(MCMC,'prior_dn')
+    start_rms             = SubElement(MCMC,'start_rms')
+    TEMPERATURE           = SubElement(MCMC,'TEMPERATURE')
+    output_filename       = SubElement(MCMC,'output_filename')
+    resume_filename       = SubElement(MCMC,'resume_filename')
+    NumIter               = SubElement(MCMC,'NumIter')
+    FileWriteNumIter      = SubElement(MCMC,'FileWriteNumIter')
+    PhaseCal2             = SubElement(MCMC,'PhaseCal')
+    
+    # populate the tree with the relevant arguments
+    num_gangs.text             = '1'
+    num_chan.text              = '1'
+    zLENS.text                 = '%.3f'%(lens.zd)
+    zSOURCE.text               = '%.3f'%(lens.zs)
+    imside.text                = 5.0
+    LAMBDA.text                = 1.0e-17
+    file_name.text             = 'data/visibility_data/'+output_file_prefix
+    mask_file.text             = 'none'
+    num_side.text              = '80'
+    N_sg_pix.text              = '60'
+    SRC_L.test                 = '%.1f'%(lens.pixscale * lens.NX)
+    lens.centerX.text          = '%.3f'%(0.1*np.round(lens.centroid[0]/0.1))
+    lens.centerY.text          = '%.3f'%(0.1*np.round(lens.centroid[0]/0.1))
+    primary_beam_fwhm.text     = '%.3f'%(1.02 * wavelength / 12.0 * 3600. * 180. / np.pi)
+    src_centX.text             = '%.3f'%()
+    src_centY.text             = '%.3f'%()
+    src_prior_type.text        = 'grad'
+    phase_angle_prior_rms.text = '15.0'
+    num_phase_pars.text        = str(NUM_TIME_STEPS)
+    logMsub.text               = '9.0'
+    dOdPhase_file.text         = 'data/visibility_data/'+output_file_prefix
+    subhaloX_file.text         = 'data/visibility_data/'+output_file_prefix+'sub_x.bin'
+    subhaloY_file.text         = 'data/visibility_data/'+output_file_prefix+'sub_y.bin'
+    output_file.text           = 'data'
+    subhalo_start_ind.text     = '0'
+    deltaP.text                = '1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6'
+    Model.text                 = 'PowerKappa'
+    modelpars.text             = str(np.ones(12))
+    parameter_flags.text       = '1 1 1 1 1 1 1 1 1 1 1 1'
+    stepsize.text              = '0.1 0.1 0.1 0.1 0.1 0.1 0.1 0.1 0.1 0.1 0.1 0.1'
+    task.text                  = 'EVALMOD'
+    findLambda.text            = '1'
+    output_file_prefix.text    = 'data/models/'+output_file_prefix[:-1]
+    GetImage.text              = '1'
+    PhaseCal.text              = '0'
+    numWalkers.text            = '64'
+    prior_up.text              = '2.0 2.0 10 10 10 10 1 1 1 1 1 1'
+    prior_dn.text              = '0.0 1.0 -10 -10 -10 -10 -1 -1 -1 -1 -1 -1'
+    start_rms.text             = '0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001'
+    TEMPERATURE.text           = '1.0'
+    output_filename.text       = 'data/mcmc_chains/'+output_file_prefix
+    resume_filename.text       = 'none'
+    NumIter.text               = '10000'
+    FileWriteNumIter.text      = '10'
+    PhaseCal2.text             = '0'
+    
+    
+    
+    # Create and write the xml file
+    rough_string = ElementTree.tostring(Ripples,'utf-8')
+    reparsed = minidom.parseString(rough_string)
+    with open(filename,'w') as file:
+        file.write(reparsed.toprettyxml(indent="    "))
+    
+    
 def write_blinded_parameters(lens,output_file_prefix):
     '''
     Given a lens, write the lens information to a folder 
@@ -364,32 +483,26 @@ def write_blinded_parameters(lens,output_file_prefix):
     
     lens.source.write_source_to(output_file_prefix+'source_true.fits')
     
-    filecontents = np.empty([24,2],str)
-    filecontents[0,0]  = "Gamma:"
-    filecontents[1,0]  = "logM:"
-    filecontents[2,0]  = "ex:"
-    filecontents[3,0]  = "ey:"
-    filecontents[4,0]  = "x:"
-    filecontents[5,0]  = "y:"
-    filecontents[6,0]  = "shear1:"
-    filecontents[7,0]  = "shear2:"
-    filecontents[8,0]  = "A3:"
-    filecontents[9,0]  = "B3:"
-    filecontents[10,0] = "A4:"
-    filecontents[11,0] = "B4:"
+    # Make a Dictionary of lens model parameters
+    filecontents = {'gamma':lens.Gamma ,\
+                    'logM':lens.logM ,\
+                    'ex': (1-lens.q)*np.cos(lens.angle)*10,
+                    'ey':-(1-lens.q)*np.sin(lens.angle)*10,
+                    'x':lens.centroid[0],
+                    'y':lens.centroid[1],
+                    'g1':lens.Multipoles[0,0],
+                    'g2':lens.Multipoles[0,1],
+                    'A3':lens.Multipoles[1,0],
+                    'B3':lens.Multipoles[1,1],
+                    'A4':lens.Multipoles[2,0],
+                    'B4':lens.Multipoles[2,1]}
     
-    filecontents[0,0]  = str(lens.Gamma)
-    filecontents[1,0]  = str(lens.logM)
-    filecontents[2,0]  = str((1-lens.q)*np.cos(lens.angle)*10)
-    filecontents[3,0]  = str(-(1-lens.q)*np.sin(lens.angle)*10)
-    filecontents[4,0]  = str(lens.centroid[0])
-    filecontents[5,0]  = str(-lens.centroid[1])
-    filecontents[6,0]  = str( lens.Multipoles[0,0])
-    filecontents[7,0]  = str(-lens.Multipoles[0,1])
-    filecontents[8,0]  = str( lens.Multipoles[1,0])
-    filecontents[9,0]  = str(-lens.Multipoles[1,1])
-    filecontents[10,0] = str( lens.Multipoles[2,0])
-    filecontents[11,0] = str(-lens.Multipoles[2,1])
+    # Add the subhalo parameters to the dict
     
-    filecontents[13,0] = "Subhalos:"
-    #filecontents[13,1] = str(len())
+    # Add the phase hyperparameters to the list?
+    
+    #
+    with open(output_file_prefix+'blinded_parameters.txt','w') as file:
+        file.write(json.dumps(filecontents))
+    
+    
