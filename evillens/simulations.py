@@ -359,7 +359,7 @@ def Mock_phase_calibration(antennaphases,ant1,ant2,pwv_mean,proportional_error):
     return correction_ant1 , correction_ant2
     
     
-def Write_xml_file():
+def write_xml_file(lens,output_file_string,wavelength,NUM_TIME_STEPS,xml_filename):
     '''
     Given a lens object, as well as a number of other arguments, create the tree structure for
     the xml file  that is read by the pipeline.
@@ -420,27 +420,27 @@ def Write_xml_file():
     # populate the tree with the relevant arguments
     num_gangs.text             = '1'
     num_chan.text              = '1'
-    zLENS.text                 = '%.3f'%(lens.zd)
-    zSOURCE.text               = '%.3f'%(lens.zs)
-    imside.text                = 5.0
-    LAMBDA.text                = 1.0e-17
-    file_name.text             = 'data/visibility_data/'+output_file_prefix
+    zLENS.text                 = '%.3f'%(lens.Zd)
+    zSOURCE.text               = '%.3f'%(lens.Zs)
+    imside.text                = '5.0'
+    LAMBDA.text                = '1.0e-17'
+    file_name.text             = 'data/visibility_data/'+output_file_string
     mask_file.text             = 'none'
     num_side.text              = '80'
     N_sg_pix.text              = '60'
     SRC_L.test                 = '%.1f'%(lens.pixscale * lens.NX)
-    lens.centerX.text          = '%.3f'%(0.1*np.round(lens.centroid[0]/0.1))
-    lens.centerY.text          = '%.3f'%(0.1*np.round(lens.centroid[0]/0.1))
+    lens_centerX.text          = '%.3f'%(0.1*np.round(lens.centroid[0]/0.1))
+    lens_centerY.text          = '%.3f'%(0.1*np.round(lens.centroid[0]/0.1))
     primary_beam_fwhm.text     = '%.3f'%(1.02 * wavelength / 12.0 * 3600. * 180. / np.pi)
-    src_centX.text             = '%.3f'%()
-    src_centY.text             = '%.3f'%()
+    src_centX.text             = '%.3f'%(np.mean(lens.source.beta_x))
+    src_centY.text             = '%.3f'%(np.mean(-lens.source.beta_y))
     src_prior_type.text        = 'grad'
     phase_angle_prior_rms.text = '15.0'
     num_phase_pars.text        = str(NUM_TIME_STEPS)
     logMsub.text               = '9.0'
-    dOdPhase_file.text         = 'data/visibility_data/'+output_file_prefix
-    subhaloX_file.text         = 'data/visibility_data/'+output_file_prefix+'sub_x.bin'
-    subhaloY_file.text         = 'data/visibility_data/'+output_file_prefix+'sub_y.bin'
+    dOdPhase_file.text         = 'data/visibility_data/'+output_file_string
+    subhaloX_file.text         = 'data/visibility_data/'+output_file_string+'sub_x.bin'
+    subhaloY_file.text         = 'data/visibility_data/'+output_file_string+'sub_y.bin'
     output_file.text           = 'data'
     subhalo_start_ind.text     = '0'
     deltaP.text                = '1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6 1e-6'
@@ -450,7 +450,7 @@ def Write_xml_file():
     stepsize.text              = '0.1 0.1 0.1 0.1 0.1 0.1 0.1 0.1 0.1 0.1 0.1 0.1'
     task.text                  = 'EVALMOD'
     findLambda.text            = '1'
-    output_file_prefix.text    = 'data/models/'+output_file_prefix[:-1]
+    output_file_prefix.text    = 'data/models/'+output_file_string[:-1]
     GetImage.text              = '1'
     PhaseCal.text              = '0'
     numWalkers.text            = '64'
@@ -458,7 +458,7 @@ def Write_xml_file():
     prior_dn.text              = '0.0 1.0 -10 -10 -10 -10 -1 -1 -1 -1 -1 -1'
     start_rms.text             = '0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001 0.001'
     TEMPERATURE.text           = '1.0'
-    output_filename.text       = 'data/mcmc_chains/'+output_file_prefix
+    output_filename.text       = 'data/mcmc_chains/'+output_file_string
     resume_filename.text       = 'none'
     NumIter.text               = '10000'
     FileWriteNumIter.text      = '10'
@@ -469,7 +469,7 @@ def Write_xml_file():
     # Create and write the xml file
     rough_string = ElementTree.tostring(Ripples,'utf-8')
     reparsed = minidom.parseString(rough_string)
-    with open(filename,'w') as file:
+    with open(xml_filename,'w') as file:
         file.write(reparsed.toprettyxml(indent="    "))
     
     
