@@ -47,7 +47,7 @@ x_range     = [-0.1,0.1]                    #
 y_range     = [-0.1,0.1]                    #
 shear_range = [-0.05,0.05]                  #
 mult_range  = [-0.05,0.05]                  #
-zlens       = 0.14                          # Trying to decide if these should be inputs or randoms
+zlens       = 0.14                          # Trying to decide if this should be inputs or randoms
 zsrc        = 4.0                           # Same as the lens redshift.
 
 # random seed for control
@@ -59,9 +59,9 @@ Multipoles = False                          # if false, just add shear.  Otherwi
 Substructures = False                       # maybe this shouldn't be an input, and the code should randomly decide.
 
 # lens grid parameters
-NX_lens = 400                               # Note that the full extent of the lensed image grid is
-NY_lens = 400                               # NX * pixscale_lens, so make sure that this is at least 4 arcsec
-pixscale_lens = 0.01                        # Also, remember that ALMA 6k or 12k bl can resolve 0.002 arcsec...
+NX_lens = 160                               # Note that the full extent of the lensed image grid is
+NY_lens = 160                               # NX * pixscale_lens, so make sure that this is at least 4 arcsec
+pixscale_lens = 0.025                       # Also, remember that ALMA 6k or 12k bl can resolve 0.002 arcsec...
 
 # Source parameters
 source_scale = 1.0                          # In case we want to stretch the size of the source grid
@@ -71,25 +71,28 @@ source_image = '../CarterPewterSchmidt_src.fits' # If build_source is false, you
 
 
 # ----------------- CASA simulation Arguments ----------------- #
-incenter = '345GHz'                         # Observing frequency
-inwidth = '8GHz'                            # Observing bandwidth (ALMA continuum is 7.5 GHz)
+incenter = '295GHz'                         # Observing frequency
+inwidth = '8.5GHz'                          # Observing bandwidth (ALMA continuum is 7.5 GHz)
 Flux = 0.15                                 # Flux (in Jy)
 indirection = 'J2000 19h00m00 -50d00m00'    # Location of source on sky (not sure if actually used)
-project = 'Practice_simulation'             # Name of simulation
+project = 'Dummy'                           # Name of simulation
 antennalist = 'alma.cycle2.7.cfg'           # ALMA observing configuration
-totaltime = '40min'                         # Duration of observation
-integration = '60s'                         # Time for single ALMA integration
-skymodel = 'Practice_simulation.fits'       # Name for lensed image fits file (writes and reads this image)
+totaltime = '1min'                         # Duration of observation
+integration = '6s'                          # Time for single ALMA integration
+skymodel = 'Dummy.fits'          # Name for lensed image fits file (writes and reads this image)
+Num_chan = 1                                # Simulate multiple continuum channels (for bandwidth smearing)
+Clean_up_ms = True                          # if True, delete the noisy and noiseless measurement sets
 
 # ----------------- Phase Error Sim Arguments ----------------- #
 
-add_phase_errors = False                    # if false, can ignore all other args here
+add_phase_errors = True                     # if false, can ignore all other args here
 Mock_calibration = True                     # if True, a Mock ALMA WVR calibration is used
 Phase_random_seed = 1                       # random seed for control
 wind_speed=6.0                              # velocity of the phase screen (in m/s)
 Phase_amp=100.0                             # amplitude of the phase screen (in degrees)
-pwvmean = 0.003                             # mean pwv column height (in meters... used in phase calibration)
-proportional_error = 0.01                   # proportional error of WVR calibration
+pwvmean = 0.001                             # mean pwv column height (in meters... used in phase calibration)
+proportional_error = 0.1                    # proportional error of WVR calibration (ALMA spec is 2%)
+clean_up_perr_ms = True                     # Delete measurement set after it has served its purpose
 
 # --------------- Visibility Binning Arguments ---------------- #
 
@@ -103,14 +106,17 @@ timespan       = 'state,scan'               # Possibly meaningless
 maxuvwdistance = 6.0                        # max distance antennas are allowed to move in uv plane (keep <= 12)
 spw            = ''                         # Which spectral windows to include (use '' for all)
 keepflags      = False                      # Keep flagged data? (obviously keep False)
-    
-    
+        
 # post mstransform arguments
 NUM_TIME_STEPS = 1                          # Number of time intervals to use in Ripples phase calibration
+clean_up_binned_ms = False                  # If true, remove the binned measurement set
 
 # ------------------------------------------------------------- #
-
-# ========================================================================
+#
+#          MAIN CODE:  DO NOT EDIT PAST THIS LINE UNLESS 
+#          YOU ARE TRYING TO ALTER THE CODE FUNCTIONALITY
+#
+# ===============================================================
 
 # Some functions have to be defined here because they interact with CASA's ms, tb, and msmd tools
 # Blech, but we'll have to live with it unless we want to pass those tools as arguments
@@ -192,10 +198,21 @@ def add_phase_errors_and_noise(noiseless_vis,noisy_vis,outputvis,amp,velocity,Mo
             ms.close()
             
             
+            # Write antennaphases and phase grid (for debugging)
+            np.save('antennaphases.npy',antennaphases)
+            np.save('phase_grid.npy',PhaseGrid)
+            np.save('Pcor1.npy',Pcor1/wavelength)
+            np.save('Pcor2.npy',Pcor2/wavelength)
+            np.save('Phase_ant1.npy',antenna1_phase/wavelength)
+            np.save('Phase_ant2.npy',antenna2_phase/wavelength)
+            
+            
 def ms_to_bin(MeasurementSet,outputdir):
     '''
     This code takes a measurement set, goes through its contents, and spits the 
     result out into the correct Ripples files in the location specified by filename_prefix
+    
+    It also calculates and applies the noise scaling, 
     '''
     
     # link to metadata (gives us spw and channel information)
@@ -319,7 +336,7 @@ if __name__ == '__main__':
     np.random.seed(lens_seed)
     
     # Generate the lens parameters (even those we won't use)
-    Gamma= np.random.random()*(gamma_range[1]-gamma_range[0])+gamma_range[0]
+    Gamma= (np.random.random()*(gamma_range[1]-gamma_range[0])+gamma_range[0])*(1-SIE)+float(SIE)
     logM = np.random.random()*(mass_range[1]-mass_range[0]) + mass_range[0]
     elp  = np.random.random()*(elp_range[1] -elp_range[0] ) + elp_range[0]
     angle= np.random.random()*(ang_range[1] -ang_range[0] ) + ang_range[0]
@@ -342,7 +359,7 @@ if __name__ == '__main__':
     # Construct the source
     lens.source = evil.Source(zsrc)
     if build_source is True:
-        lens.source.setup_grid(NX=1600,NY=1600,pixscale=0.000625)  # need crazy hi-res grid because of magnification
+        lens.source.setup_grid(NX=160,NY=160,pixscale=0.00625)  # need crazy hi-res grid because of magnification
         
         # I have found that these control parameters for the source seem to produce good images
         Nclumps = np.random.randint(1,5)
@@ -379,7 +396,16 @@ if __name__ == '__main__':
     
     # For now, just to debug, lets see if it gets this far!!
     #lens.plot('non-lensed image')
-
+    
+    # get the magnification, in case we need it
+    lens_flux = np.trapz(np.trapz(lens.image,dx=lens.pixscale),dx=lens.pixscale)
+    src_flux  = np.trapz(np.trapz(lens.source.intensity,dx=lens.source.pixscale),dx=lens.source.pixscale)
+    magnification = lens_flux / src_flux 
+    
+    # Make the image into Nchan images (to simulate multiple channels)
+    if Num_chan != 1:
+        orig_shape = lens.image.shape
+        lens.image = np.outer(np.ones(Num_chan),lens.image).reshape([Num_chan,orig_shape[0],orig_shape[1]])
 
     # Write the image to fits file to be simobserve'd
     lens.write_image_to(skymodel)
@@ -425,16 +451,21 @@ if __name__ == '__main__':
     ms_to_bin(current_ms,output_file_prefix)
     
     # Write blinded parameters to a file
-    #write_blinded_parameters(lens,output_file_prefix+'Top_secret/')
+    write_blinded_parameters(lens,output_file_prefix+'/Top_secret/')
+    write_xml_file(lens,output_file_prefix,0.001,NUM_TIME_STEPS,output_file_prefix+'/parameters.xml')
+    
+    print lens.Zd , lens.Zs , lens.logM , (1-lens.q)*np.cos(lens.angle),(1-lens.q)*np.sin(lens.angle)
+    print lens.centroid[0],lens.centroid[1],lens.Multipoles[0,0],lens.Multipoles[0,1], magnification
     
     print("Data has been written to the output folder, now its time to clean up")
     
     # Clean up (remove temporary files)
-    shutil.rmtree(noisyms)
-    shutil.rmtree(noiselessms)
-    if add_phase_errors is True:
+    if Clean_up_ms is True:
+        shutil.rmtree(noisyms)
+        shutil.rmtree(noiselessms)
+    if add_phase_errors is True and clean_up_perr_ms is True:
         shutil.rmtree(Phase_error_ms)
-    if run_mstransform is True:
+    if run_mstransform is True and clean_up_binned_ms is True:
         shutil.rmtree(Binned_ms)
     
     
